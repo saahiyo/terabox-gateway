@@ -94,9 +94,6 @@ pip-delete-this-directory.txt
 
 # dotenv environment variables
 .env
-.env.*
-*.env
-*.env.*
 
 # OS / Editor files
 .DS_Store

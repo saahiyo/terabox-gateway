@@ -87,7 +87,12 @@ except Exception:
 
 
 def load_cookies() -> dict[str, str]:
-    """Load cookies from environment variables or a local file."""
+    """Load cookies from environment variables or a local file.
+    
+    Supports multiple formats for COOKIE_JSON:
+    1. Full JSON object: {"ndus": "token_value", "other": "value"}
+    2. Simple string: just the ndus token value (will be auto-wrapped)
+    """
     data = None
     
     # First try COOKIE_JSON from .env file
@@ -95,8 +100,15 @@ def load_cookies() -> dict[str, str]:
     if cookie_json:
         try:
             import json
+            # Try parsing as JSON first
             data = json.loads(cookie_json)
-            logging.info("Loaded cookies from COOKIE_JSON environment variable")
+            logging.info("Loaded cookies from COOKIE_JSON environment variable (JSON format)")
+        except json.JSONDecodeError:
+            # If it's not valid JSON, treat it as a simple ndus token value
+            cookie_json = cookie_json.strip()
+            if cookie_json:
+                data = {"ndus": cookie_json}
+                logging.info("Loaded cookies from COOKIE_JSON environment variable (simple string format)")
         except Exception as e:
             logging.warning(f"Failed to parse COOKIE_JSON: {e}")
     
