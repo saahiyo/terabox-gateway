@@ -218,6 +218,12 @@ async def fetch_download_link(
                 js_token = find_between(response_data, "fn%28%22", "%22%29")
                 log_id = find_between(response_data, "dp-logid=", "&")
 
+                # with open("log.txt", "w", encoding="utf-8") as f:
+                #     f.write(js_token + "\n" + log_id)
+
+                # with open("log-page.html", "w", encoding="utf-8") as f:
+                #     f.write(response_data)
+
                 if not js_token or not log_id:
                     logging.error("Failed to extract required tokens")
                     return {
