@@ -108,7 +108,6 @@ def load_cookies() -> dict[str, str]:
             cookie_json = cookie_json.strip()
             if cookie_json:
                 data = {"ndus": cookie_json}
-                logging.info(f"Loaded cookies from COOKIE_JSON: {cookie_json}")
         except Exception as e:
             logging.warning(f"Failed to parse COOKIE_JSON: {e}")
     
@@ -221,11 +220,11 @@ async def fetch_download_link(
         # Remove leading "1" if present (TeraBox shortcode format)
         if surl.startswith("1"):
             surl = surl[1:]
-            logging.info(f"Stripped leading '1' from surl: {surl}")
+            # logging.info(f"Stripped leading '1' from surl: {surl}")
         
         # Use proxy endpoint to get jstoken
         proxy_url = f"https://tbox-page.shakir-ansarii075.workers.dev/?surl={surl}"
-        logging.info(f"Fetching tokens from proxy: {proxy_url}")
+        # logging.info(f"Fetching tokens from proxy: {proxy_url}")
         
         async with aiohttp.ClientSession(cookies=cookies, headers=headers) as session:
             # Step 1: Get the share page HTML from proxy (proxy handles cookies)
@@ -247,7 +246,7 @@ async def fetch_download_link(
                 # Use the original URL for the request_url
                 request_url = url
 
-        logging.info(f"Extracted surl: {surl}, logid: {log_id}, js_token: {js_token}")
+        # logging.info(f"Extracted surl: {surl}, logid: {log_id}, js_token: {js_token}")
         
         # Create a new session with cookies for API calls
         async with aiohttp.ClientSession(cookies=cookies, headers=headers) as session:
@@ -264,7 +263,7 @@ async def fetch_download_link(
                 params["pwd"] = password
 
             list_url = "https://tbx-proxy.shakir-ansarii075.workers.dev/"
-            logging.info(f"Fetching file list from proxy: {list_url}")
+            # logging.info(f"Fetching file list from proxy: {list_url}")
 
             async with session.get(
                 list_url, params=params, headers=session_headers
@@ -572,7 +571,7 @@ def api():
             return jsonify(
                 {
                     "status": "success",
-                    "used_cookie": cookies.get("ndus", ""),
+                    # "used_cookie": cookies.get("ndus", ""), # Removed for privacy
                     "url": url,
                     "files": formatted_files,
                     "total_files": len(formatted_files),
