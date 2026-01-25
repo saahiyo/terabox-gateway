@@ -108,7 +108,7 @@ def load_cookies() -> dict[str, str]:
             cookie_json = cookie_json.strip()
             if cookie_json:
                 data = {"ndus": cookie_json}
-                logging.info("Loaded cookies from COOKIE_JSON environment variable (simple string format)")
+                logging.info(f"Loaded cookies from COOKIE_JSON: {cookie_json}")
         except Exception as e:
             logging.warning(f"Failed to parse COOKIE_JSON: {e}")
     
@@ -273,8 +273,8 @@ async def fetch_download_link(
 
                     errno = response_data2.get("errno", -1)
 
-                    logging.info(f"API response: {response_data2}")
-                    
+                    # logging.info(f"API response: {response_data2}")
+
                     # Handle verification required
                     if errno == 400141:
                         logging.warning("Link requires verification")
@@ -390,6 +390,7 @@ async def fetch_direct_links(
                 # Get direct link by following redirect
 
                 dlink = item.get("dlink") or ""
+                logging.info(f"Direct link: {dlink}")
 
                 direct_link = None
 
