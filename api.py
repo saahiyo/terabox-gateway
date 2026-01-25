@@ -273,6 +273,8 @@ async def fetch_download_link(
 
                     errno = response_data2.get("errno", -1)
 
+                    logging.info(f"API response: {response_data2}")
+                    
                     # Handle verification required
                     if errno == 400141:
                         logging.warning("Link requires verification")
