@@ -542,6 +542,9 @@ def api():
         password = request.args.get("pwd", "")
         logging.info(f"API request for URL: {url}")
 
+        # Load cookies to include in response
+        cookies = load_cookies()
+
         # Run async fetch in event loop
         link_data = asyncio.run(fetch_download_link(url, password))
 
@@ -569,6 +572,7 @@ def api():
             return jsonify(
                 {
                     "status": "success",
+                    "used_cookie": cookies.get("ndus", ""),
                     "url": url,
                     "files": formatted_files,
                     "total_files": len(formatted_files),
