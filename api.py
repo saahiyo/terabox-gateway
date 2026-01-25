@@ -207,22 +207,35 @@ async def fetch_download_link(
     """Fetch file information from TeraBox share link"""
     try:
         cookies = load_cookies()
+        
+        # Extract surl from URL first
+        parsed_url = urlparse(url)
+        if "surl=" in parsed_url.query:
+            surl = parse_qs(parsed_url.query)["surl"][0]
+        elif "/s/" in parsed_url.path:
+            surl = parsed_url.path.split("/s/")[1].split("/")[0].split("?")[0]
+        else:
+            logging.error("Could not extract surl from URL")
+            return {"error": "Invalid URL format", "errno": -1}
+        
+        # Remove leading "1" if present (TeraBox shortcode format)
+        if surl.startswith("1"):
+            surl = surl[1:]
+            logging.info(f"Stripped leading '1' from surl: {surl}")
+        
+        # Use proxy endpoint to get jstoken
+        proxy_url = f"https://tbox-page.shakir-ansarii075.workers.dev/?surl={surl}"
+        logging.info(f"Fetching tokens from proxy: {proxy_url}")
+        
         async with aiohttp.ClientSession(cookies=cookies, headers=headers) as session:
-            # Step 1: Get the share page and extract tokens
-            logging.info(f"Fetching share page: {url}")
-            async with session.get(url) as response1:
+            # Step 1: Get the share page HTML from proxy (proxy handles cookies)
+            async with session.get(proxy_url) as response1:
                 response1.raise_for_status()
                 response_data = await response1.text()
 
                 # Extract required tokens
                 js_token = find_between(response_data, "fn%28%22", "%22%29")
                 log_id = find_between(response_data, "dp-logid=", "&")
-
-                # with open("log.txt", "w", encoding="utf-8") as f:
-                #     f.write(js_token + "\n" + log_id)
-
-                # with open("log-page.html", "w", encoding="utf-8") as f:
-                #     f.write(response_data)
 
                 if not js_token or not log_id:
                     logging.error("Failed to extract required tokens")
@@ -231,47 +244,31 @@ async def fetch_download_link(
                         "errno": -1,
                     }
 
-                request_url = str(response1.url)
+                # Use the original URL for the request_url
+                request_url = url
 
-                # Extract surl from URL
-                if "surl=" in request_url:
-                    surl = request_url.split("surl=")[1].split("&")[0]
-                elif "/s/" in request_url:
-                    surl = request_url.split("/s/")[1].split("?")[0]
-                else:
-                    logging.error("Could not extract surl from URL")
-                    return {"error": "Invalid URL format", "errno": -1}
+        logging.info(f"Extracted surl: {surl}, logid: {log_id}, js_token: {js_token}")
+        
+        # Create a new session with cookies for API calls
+        async with aiohttp.ClientSession(cookies=cookies, headers=headers) as session:
+            # Update headers with the actual referer
+            session_headers = headers.copy()
+            session_headers["Referer"] = request_url
 
-                logging.info(f"Extracted surl: {surl}, logid: {log_id}")
+            # Use proxy API endpoint with simplified parameters
+            params = {
+                "jsToken": js_token,
+                "shorturl": surl,
+            }
+            if password:
+                params["pwd"] = password
 
-                # Update headers with the actual referer
-                session_headers = headers.copy()
-                session_headers["Referer"] = request_url
+            list_url = "https://tbx-proxy.shakir-ansarii075.workers.dev/"
+            logging.info(f"Fetching file list from proxy: {list_url}")
 
-                params = {
-                    "app_id": "250528",
-                    "web": "1",
-                    "channel": "dubox",
-                    "clienttype": "0",
-                    "jsToken": js_token,
-                    "dplogid": log_id,
-                    "page": "1",
-                    "num": "20",
-                    "order": "time",
-                    "desc": "1",
-                    "site_referer": request_url,
-                    "shorturl": surl,
-                    "root": "1",
-                }
-                if password:
-                    params["pwd"] = password
-
-                list_url = "https://www.terabox.app/share/list"
-                logging.info(f"Fetching file list from: {list_url}")
-
-                async with session.get(
-                    list_url, params=params, headers=session_headers
-                ) as response2:
+            async with session.get(
+                list_url, params=params, headers=session_headers
+            ) as response2:
                     response_data2 = await response2.json()
 
                     errno = response_data2.get("errno", -1)
