@@ -11,6 +11,7 @@ from flask import Flask, request, jsonify, Response
 import asyncio
 from datetime import datetime
 import logging
+import time
 
 # Import from our modules
 from config import load_cookies
@@ -21,6 +22,22 @@ from terabox_client import (
     _gather_format_file_info,
     _normalize_api2_items,
 )
+
+
+def format_response_time(seconds: float) -> str:
+    """Format response time with appropriate unit (s or m).
+    
+    Args:
+        seconds: Time in seconds
+        
+    Returns:
+        Formatted string with 's' or 'm' suffix
+    """
+    if seconds >= 60:
+        minutes = round(seconds / 60, 2)
+        return f"{minutes}m"
+    else:
+        return f"{round(seconds, 3)}s"
 
 
 def create_app() -> Flask:
@@ -105,6 +122,7 @@ def api():
     call asyncio.run to execute the async logic.
     """
     try:
+        start_time = time.time()
         url = request.args.get("url")
 
         if not url:
@@ -159,6 +177,7 @@ def api():
         # Format file information
         if link_data:
             formatted_files = asyncio.run(_gather_format_file_info(link_data))
+            response_time = format_response_time(time.time() - start_time)
 
             return jsonify(
                 {
@@ -167,6 +186,7 @@ def api():
                     "url": url,
                     "files": formatted_files,
                     "total_files": len(formatted_files),
+                    "response_time": response_time,
                     "timestamp": datetime.utcnow().isoformat(),
                 }
             )
@@ -190,6 +210,7 @@ def api():
 def api2():
     """Alternative API endpoint - with direct download links (sync wrapper)."""
     try:
+        start_time = time.time()
         url = request.args.get("url")
 
         if not url:
@@ -238,12 +259,14 @@ def api2():
         if link_data:
             # Normalize file objects to match /api shape and include direct_link when available
             formatted_files = asyncio.run(_normalize_api2_items(link_data))
+            response_time = format_response_time(time.time() - start_time)
             return jsonify(
                 {
                     "status": "success",
                     "url": url,
                     "files": formatted_files,
                     "total_files": len(formatted_files),
+                    "response_time": response_time,
                     "timestamp": datetime.utcnow().isoformat(),
                 }
             )
