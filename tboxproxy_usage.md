@@ -1,27 +1,43 @@
 # TeraBox Unified Cloudflare Worker API
 
-A single Cloudflare Worker endpoint to proxy **TeraBox share pages and APIs**, with optional cookie forwarding and automatic `jsToken` resolution.
+A single **Cloudflare Worker** that proxies **TeraBox share pages, APIs, and HLS streaming**, with:
+
+- Automatic `jsToken` extraction
+- Optional cookie forwarding
+- Playable **HLS (M3U8) streaming**
+- Segment (`.ts / .m4s`) proxying
+- Browser, mobile, and VLC compatibility
 
 ---
 
 ## Base URL
 
 ```text
-https://tbx-proxy.shakir-ansarii075.workers.dev/
+https://<your-worker>.workers.dev/
 ```
 
 All behavior is controlled using the `mode` query parameter.
 
 ---
 
-## Supported Modes
+## Supported Modes Overview
 
-### 1. `mode=resolve` (Recommended)
+| Mode        | Purpose |
+|------------|--------|
+| `resolve`  | Auto extract `jsToken` + fetch share API (recommended) |
+| `page`     | Proxy raw share HTML |
+| `api`      | Manual share API proxy |
+| `stream`   | Fetch + rewrite M3U8 playlist |
+| `segment`  | Proxy media segments (`.ts`, `.m4s`) |
+
+---
+
+## 1️⃣ mode=resolve (Recommended)
 
 Automatically:
 - Fetches the TeraBox share page
 - Extracts `jsToken`
-- Calls the TeraBox share API
+- Calls the share API
 - Returns JSON metadata
 
 **Endpoint**
@@ -41,7 +57,7 @@ Automatically:
 
 ---
 
-### 2. `mode=page` (HTML Proxy)
+## 2️⃣ mode=page (HTML Proxy)
 
 Returns the raw HTML of the TeraBox share page.
 
@@ -58,13 +74,13 @@ Returns the raw HTML of the TeraBox share page.
 **Use cases**
 - Debugging
 - Manual inspection
-- Client-side parsing
+- Token investigation
 
 ---
 
-### 3. `mode=api` (Manual API Access)
+## 3️⃣ mode=api (Manual Share API)
 
-Directly proxies the TeraBox share API when `jsToken` is already available.
+Directly proxies the TeraBox share API when `jsToken` is already known.
 
 **Endpoint**
 ```text
@@ -82,22 +98,62 @@ Directly proxies the TeraBox share API when `jsToken` is already available.
 
 ---
 
+## 4️⃣ mode=stream (HLS Playlist Proxy)
+
+Fetches the **TeraBox M3U8 playlist**, then **rewrites all segment URLs**
+so that **every media request goes through the Worker**.
+
+**Endpoint**
+```text
+/?mode=stream&uk=...&shareid=...&fid=...&jsToken=...&type=M3U8_AUTO_360
+```
+
+**What it does**
+- Proxies `/share/streaming`
+- Rewrites segment URLs to `mode=segment`
+- Returns a **playable M3U8**
+
+**Use directly in players**
+- hls.js
+- video.js
+- VLC
+- Android / iOS players
+
+---
+
+## 5️⃣ mode=segment (Media Segment Proxy)
+
+Proxies individual video segments (`.ts`, `.m4s`).
+
+This mode is **automatically used** by rewritten playlists — you do not need
+to call it manually.
+
+**Endpoint**
+```text
+/?mode=segment&url=<ENCODED_TS_OR_M4S_URL>
+```
+
+**Purpose**
+- Preserves cookies & headers
+- Avoids CORS issues
+- Prevents direct CDN blocking
+
+---
+
 ## Cookie Handling
 
-- If the client sends cookies, they are forwarded upstream
-- If no cookies are provided, requests proceed without cookies
-- No server-side or hard-coded cookies are used
+- If the client sends cookies → they are forwarded upstream
+- If no cookies are provided → request proceeds without cookies
+- No hard-coded or server-side cookies are used
 
 **Cookies are required for**
 - Private shares
-- Logged-in user content
-- Preventing empty or restricted API responses
+- Logged-in content
+- Avoiding empty or restricted responses
 
 ---
 
 ## Error Responses
-
-Common error formats:
 
 ```json
 { "error": "Missing surl" }
@@ -110,49 +166,53 @@ Common error formats:
 ```json
 {
   "error": "Invalid or missing mode",
-  "allowed": ["page", "api", "resolve"]
+  "allowed": ["page", "api", "resolve", "stream", "segment"]
 }
 ```
 
 ---
 
-## Recommended Usage Flow
+## Recommended Usage Flow (Streaming)
 
 ```text
-Client
+Player
   ↓
-/?mode=resolve&surl=XXXX
+/?mode=stream
   ↓
-Worker fetches HTML
+Worker rewrites M3U8
   ↓
-Extracts jsToken
+Player requests segments
   ↓
-Calls TeraBox API
+/?mode=segment
   ↓
-Returns JSON
+TeraBox CDN
 ```
 
 ---
 
 ## Best Practices
 
-- Prefer `mode=resolve` for most integrations
-- Always pass cookies for private or restricted shares
-- Treat `jsToken` as temporary and non-cacheable
-- Avoid exposing cookies in client-side applications
+- Use `mode=resolve` for metadata access
+- Use `mode=stream` for video playback
+- Always forward cookies for private content
+- Do not cache `jsToken` client-side
+- Treat stream URLs as temporary
 
 ---
 
 ## Common Use Cases
 
-- Telegram bots
+- Telegram / Discord bots
+- Web-based HLS players
 - Download link resolvers
-- File indexers
-- Backend APIs
-- Cloudflare Workers with KV caching
+- File browsers
+- Backend-only streaming APIs
+- Cloudflare Workers + KV caching
 
 ---
 
-## License
+## Legal / Disclaimer
 
-Use responsibly. This project is intended for educational and interoperability purposes.
+This project is for **educational and interoperability purposes only**.  
+You are responsible for complying with TeraBox terms of service and
+applicable laws.

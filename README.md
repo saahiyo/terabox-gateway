@@ -15,7 +15,7 @@ The API uses `aiohttp` for asynchronous requests and leverages a unified Cloudfl
 ## Features
 
 - **Web API Endpoints**:
-  - `GET /api`: Lists files with metadata, including file size, thumbnails, and paths
+  - `GET /api`: Unified endpoint - file listing (backward compatible) and proxy modes (resolve, page, api, stream, segment)
   - `GET /api2`: Retrieves file metadata and resolves direct download links
   - `GET /help`: Provides inline documentation for the API
   - `GET /health`: Simple health check endpoint
@@ -206,6 +206,56 @@ curl "http://localhost:5000/api2?url=https://teraboxshare.com/s/XXXXXXXX"
 
 **Response**: Similar to `/api` but includes `direct_link` field for each file.
 
+#### `GET /api` - Unified Endpoint (File Listing + Proxy Modes)
+
+The `/api` endpoint now supports **two usage patterns**:
+
+**Pattern 1: File Listing (Backward Compatible)**
+Retrieves file metadata for a TeraBox share link - maintains full backward compatibility.
+
+```bash
+curl "http://localhost:5000/api?url=https://1024terabox.com/s/1LNr3tyl5pI5KUM8BecGtyQ"
+```
+
+**Pattern 2: Proxy Modes**
+Direct access to the Cloudflare Worker proxy with multiple modes for different use cases.
+
+**Mode: `resolve` (Recommended)**
+Auto extract jsToken + fetch share API in one call.
+```bash
+curl "http://localhost:5000/api?mode=resolve&surl=abc123"
+```
+
+**Mode: `page`**
+Proxy raw share HTML page for debugging.
+```bash
+curl "http://localhost:5000/api?mode=page&surl=abc123"
+```
+
+**Mode: `api`**
+Manual share API proxy when jsToken is already known.
+```bash
+curl "http://localhost:5000/api?mode=api&jsToken=XYZ&shorturl=abc123"
+```
+
+**Mode: `stream`**
+Fetch and rewrite M3U8 playlist for HLS streaming.
+```bash
+curl "http://localhost:5000/api?mode=stream&uk=...&shareid=...&fid=...&jsToken=...&type=M3U8_AUTO_360"
+```
+
+**Mode: `segment`**
+Proxy media segments (.ts, .m4s) - used automatically by rewritten playlists.
+```bash
+curl "http://localhost:5000/api?mode=segment&url=ENCODED_URL"
+```
+
+**Notes**:
+- Cookies are forwarded from client request if provided in `Cookie` header
+- Use `mode=resolve` for most use cases
+- `stream` and `segment` modes enable HLS video playback in browsers and players
+- Legacy `/api?url=...` usage remains fully supported
+
 ---
 
 ## Supported TeraBox Domains
@@ -252,18 +302,33 @@ The TeraBox Gateway uses a **unified Cloudflare Worker proxy** for all TeraBox A
 
 #### Proxy Modes
 
-**1. `mode=resolve` (Default)**
+The unified proxy supports 5 distinct modes, all accessible via the `/proxy` endpoint:
+
+**1. `mode=resolve` (Recommended)**
 - Automatically fetches the share page, extracts jsToken, and returns file metadata
 - **Single HTTP call** for most common use cases
-- Recommended for production use
+- Returns JSON with file list and metadata
+- Best for production use
 
 **2. `mode=page`**
 - Returns raw HTML of TeraBox share page
 - Useful for debugging and manual token extraction
+- Returns HTML content
 
 **3. `mode=api`**
 - Direct API access when jsToken is already known
 - Used for directory listings and advanced scenarios
+- Returns JSON from TeraBox API
+
+**4. `mode=stream`**
+- Fetches M3U8 playlist and rewrites segment URLs
+- Enables HLS video streaming in browsers and players
+- Returns modified M3U8 playlist
+
+**5. `mode=segment`**
+- Proxies individual video segments (.ts, .m4s files)
+- Automatically used by rewritten playlists
+- Returns binary media data
 
 ### Request Flow
 
