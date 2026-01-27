@@ -4,10 +4,11 @@ A lightweight Flask-based API for extracting file information and direct downloa
 
 This project provides:
 - **Web API** with endpoints for listing files and retrieving direct links
+- **Unified Cloudflare Worker Proxy** for optimized TeraBox API access
 - **Vercel-ready deployment** configuration
 - **Flexible cookie authentication** with support for simple string or JSON formats
 
-The API uses `aiohttp` for asynchronous requests to TeraBox and relies on browser cookies for authentication.
+The API uses `aiohttp` for asynchronous requests and leverages a unified Cloudflare Worker proxy with mode-based operations for efficient TeraBox API interaction.
 
 ---
 
@@ -36,17 +37,21 @@ The API uses `aiohttp` for asynchronous requests to TeraBox and relies on browse
 
 ```
 terabox-gateway/
-├── api.py              # Main Flask application and API logic
-├── main.py             # Entry point for running the Flask app locally
-├── .env                # Environment variables (not tracked in git)
-├── .env.example        # Example environment configuration
-├── requirements.txt    # Python dependencies
-├── pyproject.toml      # Project metadata
-├── vercel.json         # Vercel deployment configuration
-├── .gitignore          # Git ignore file
-├── LICENSE             # MIT License
-├── README.md           # This file
-└── endpoints/          # Reserved for future route modularization
+├── api.py                # Main Flask application and API routes
+├── config.py             # Configuration and constants (proxy URLs, headers)
+├── terabox_client.py     # TeraBox API client with unified proxy integration
+├── utils.py              # Utility functions (validation, formatting)
+├── main.py               # Entry point for running Flask locally
+├── .env                  # Environment variables (not tracked in git)
+├── .env.example          # Example environment configuration
+├── requirements.txt      # Python dependencies
+├── pyproject.toml        # Project metadata
+├── vercel.json           # Vercel deployment configuration
+├── tboxproxy_usage.md    # Unified proxy API documentation
+├── .gitignore            # Git ignore file
+├── LICENSE               # MIT License
+├── README.md             # This file
+└── endpoints/            # Reserved for future route modularization
 ```
 
 ---
@@ -235,6 +240,51 @@ You can configure the API using environment variables in your `.env` file:
 
 ---
 
+## Technical Implementation
+
+### Unified Proxy Architecture
+
+The TeraBox Gateway uses a **unified Cloudflare Worker proxy** for all TeraBox API interactions. This architecture provides:
+
+- **Reduced Network Overhead**: 33-50% fewer HTTP requests (1-2 instead of 2-3 per request)
+- **Server-Side Token Handling**: Automatic jsToken extraction handled by the proxy
+- **Mode-Based Operations**: Three distinct modes for different use cases
+
+#### Proxy Modes
+
+**1. `mode=resolve` (Default)**
+- Automatically fetches the share page, extracts jsToken, and returns file metadata
+- **Single HTTP call** for most common use cases
+- Recommended for production use
+
+**2. `mode=page`**
+- Returns raw HTML of TeraBox share page
+- Useful for debugging and manual token extraction
+
+**3. `mode=api`**
+- Direct API access when jsToken is already known
+- Used for directory listings and advanced scenarios
+
+### Request Flow
+
+```
+Client Request → Flask API → Unified Proxy (mode=resolve) → TeraBox API → Response
+               ↓
+         (if directory)
+               ↓
+         Unified Proxy (mode=api) → Directory Contents → Response
+```
+
+**Key Benefits**:
+- ✅ Simplified codebase with no manual token parsing
+- ✅ Faster response times due to fewer roundtrips
+- ✅ More reliable token extraction (handled server-side)
+- ✅ Better error handling and reporting
+
+For detailed proxy documentation, see [tboxproxy_usage.md](tboxproxy_usage.md).
+
+---
+
 ## Deployment
 
 ### Deploy to Vercel
@@ -332,5 +382,6 @@ For questions or support, contact [@Saahiyo](https://github.com/Saahiyo)
 ## Acknowledgments
 
 - Built with Flask and aiohttp for efficient async operations
+- Unified Cloudflare Worker proxy for optimized API access
 - Designed for seamless Vercel deployment
 - Supports multiple TeraBox domains and share URL formats
