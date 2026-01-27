@@ -18,7 +18,10 @@ from utils import find_between, extract_thumbnail_dimensions, get_formatted_size
 async def fetch_download_link(
     url: str, password: str = ""
 ) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
-    """Fetch file information from TeraBox share link.
+    """Fetch file information from TeraBox share link using unified proxy API.
+    
+    This function uses the unified Cloudflare Worker proxy with mode=resolve,
+    which automatically handles jsToken extraction and API calls in a single request.
     
     Args:
         url: TeraBox share URL
@@ -28,9 +31,11 @@ async def fetch_download_link(
         Union[List[Dict[str, Any]], Dict[str, Any]]: List of files or error dict
     """
     try:
+        from config import PROXY_BASE_URL, PROXY_MODE_RESOLVE
+        
         cookies = load_cookies()
         
-        # Extract surl from URL first
+        # Extract surl from URL
         parsed_url = urlparse(url)
         if "surl=" in parsed_url.query:
             surl = parse_qs(parsed_url.query)["surl"][0]
@@ -43,114 +48,120 @@ async def fetch_download_link(
         # Remove leading "1" if present (TeraBox shortcode format)
         if surl.startswith("1"):
             surl = surl[1:]
-            # logging.info(f"Stripped leading '1' from surl: {surl}")
         
-        # Use proxy endpoint to get jstoken
-        proxy_url = f"https://tbox-page.shakir-ansarii075.workers.dev/?surl={surl}"
-        # logging.info(f"Fetching tokens from proxy: {proxy_url}")
-        
+        # Use unified proxy with mode=resolve for automatic token extraction and API call
         async with aiohttp.ClientSession(cookies=cookies, headers=headers) as session:
-            # Step 1: Get the share page HTML from proxy (proxy handles cookies)
-            async with session.get(proxy_url) as response1:
-                response1.raise_for_status()
-                response_data = await response1.text()
-
-                # Extract required tokens
-                js_token = find_between(response_data, "fn%28%22", "%22%29")
-                log_id = find_between(response_data, "dp-logid=", "&")
-
-                if not js_token or not log_id:
-                    logging.error("Failed to extract required tokens")
-                    return {
-                        "error": "Failed to extract authentication tokens",
-                        "errno": -1,
-                    }
-
-                # Use the original URL for the request_url
-                request_url = url
-
-        # logging.info(f"Extracted surl: {surl}, logid: {log_id}, js_token: {js_token}")
-        
-        # Create a new session with cookies for API calls
-        async with aiohttp.ClientSession(cookies=cookies, headers=headers) as session:
-            # Update headers with the actual referer
-            session_headers = headers.copy()
-            session_headers["Referer"] = request_url
-
-            # Use proxy API endpoint with simplified parameters
             params = {
-                "jsToken": js_token,
-                "shorturl": surl,
+                "mode": PROXY_MODE_RESOLVE,
+                "surl": surl,
             }
             if password:
                 params["pwd"] = password
-
-            list_url = "https://tbx-proxy.shakir-ansarii075.workers.dev/"
-            # logging.info(f"Fetching file list from proxy: {list_url}")
-
-            async with session.get(
-                list_url, params=params, headers=session_headers
-            ) as response2:
-                    response_data2 = await response2.json()
-
-                    errno = response_data2.get("errno", -1)
-
-                    # logging.info(f"API response: {response_data2}")
-
-                    # Handle verification required
-                    if errno == 400141:
-                        logging.warning("Link requires verification")
+            
+            logging.info(f"Fetching file list from unified proxy (mode=resolve): {PROXY_BASE_URL}")
+            
+            async with session.get(PROXY_BASE_URL, params=params) as response:
+                # Handle non-200 responses
+                if response.status != 200:
+                    error_text = await response.text()
+                    logging.error(f"Proxy returned {response.status}: {error_text}")
+                    return {
+                        "error": f"Proxy error: {response.status}",
+                        "errno": -1,
+                        "details": error_text[:200]  # Truncate for logging
+                    }
+                
+                response_data = await response.json()
+                
+                # Check for error response from proxy
+                if "error" in response_data:
+                    error_msg = response_data.get("error", "Unknown error")
+                    logging.error(f"Proxy error: {error_msg}")
+                    
+                    # Check if this is a token extraction failure (may need cookies)
+                    if "jsToken" in error_msg or "cookie" in error_msg.lower():
                         return {
-                            "error": "Verification required",
-                            "errno": 400141,
-                            "message": "This link requires password or captcha verification",
-                            "surl": surl,
-                            "requires_password": True,
+                            "error": error_msg,
+                            "errno": -1,
+                            "message": "Failed to extract authentication tokens. Cookies may be required for this share.",
                         }
-
-                    # Handle other errors
-                    if errno != 0:
-                        error_msg = response_data2.get("errmsg", "Unknown error")
-                        logging.error(f"API error {errno}: {error_msg}")
-                        return {"error": error_msg, "errno": errno}
-
-                    # Check if we got the file list
-                    if "list" not in response_data2:
-                        logging.error("No file list in response")
-                        return {"error": "No files found in response", "errno": -1}
-
-                    files = response_data2["list"]
-                    logging.info(f"Found {len(files)} items")
-
-                    # Step 3: If it's a directory, fetch its contents
-                    if files and files[0].get("isdir") == "1":
-                        logging.info("Fetching directory contents")
-                        params.update(
-                            {
-                                "dir": files[0]["path"],
-                                "order": "asc",
-                                "by": "name",
-                                "dplogid": log_id,
-                            }
-                        )
-                        params.pop("desc", None)
-                        params.pop("root", None)
-
-                        async with session.get(
-                            list_url, params=params, headers=session_headers
-                        ) as response3:
-                            response_data3 = await response3.json()
-
-                            if "list" not in response_data3:
-                                return {
-                                    "error": "Failed to fetch directory contents",
-                                    "errno": -1,
-                                }
-
-                            files = response_data3["list"]
+                    
+                    return {
+                        "error": error_msg,
+                        "errno": -1,
+                    }
+                
+                # Handle TeraBox API errors
+                errno = response_data.get("errno", -1)
+                
+                # Handle verification required
+                if errno == 400141:
+                    logging.warning("Link requires verification")
+                    return {
+                        "error": "Verification required",
+                        "errno": 400141,
+                        "message": "This link requires password or captcha verification",
+                        "surl": surl,
+                        "requires_password": True,
+                    }
+                
+                # Handle other errors
+                if errno != 0:
+                    error_msg = response_data.get("errmsg", "Unknown error")
+                    logging.error(f"API error {errno}: {error_msg}")
+                    return {"error": error_msg, "errno": errno}
+                
+                # Check if we got the file list
+                if "list" not in response_data:
+                    logging.error("No file list in response")
+                    return {"error": "No files found in response", "errno": -1}
+                
+                files = response_data["list"]
+                logging.info(f"Found {len(files)} items")
+                
+                # If it's a directory, fetch its contents
+                if files and files[0].get("isdir") == "1":
+                    logging.info("Fetching directory contents")
+                    
+                    # For directory contents, we need to use the API mode with additional parameters
+                    # Extract necessary tokens from the initial response if available
+                    js_token = response_data.get("jsToken")
+                    log_id = response_data.get("dplogid")
+                    
+                    if not js_token:
+                        logging.warning("No jsToken in response for directory listing, returning folder info only")
+                        return files
+                    
+                    # Use mode=api for directory contents with the jsToken
+                    from config import PROXY_MODE_API
+                    
+                    dir_params = {
+                        "mode": PROXY_MODE_API,
+                        "jsToken": js_token,
+                        "shorturl": surl,
+                        "dir": files[0]["path"],
+                        "order": "asc",
+                        "by": "name",
+                    }
+                    if log_id:
+                        dir_params["dplogid"] = log_id
+                    if password:
+                        dir_params["pwd"] = password
+                    
+                    async with session.get(PROXY_BASE_URL, params=dir_params) as dir_response:
+                        if dir_response.status != 200:
+                            logging.warning("Failed to fetch directory contents, returning folder info")
+                            return files
+                        
+                        dir_data = await dir_response.json()
+                        
+                        if "list" in dir_data and dir_data.get("errno") == 0:
+                            files = dir_data["list"]
                             logging.info(f"Found {len(files)} files in directory")
-
-                    return files
+                        else:
+                            logging.warning("Failed to parse directory contents, returning folder info")
+                
+                return files
 
     except aiohttp.ClientResponseError as e:
         logging.error(f"HTTP error: {e.status} - {e.message}")

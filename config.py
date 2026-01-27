@@ -28,6 +28,13 @@ ALLOWED_HOSTS: set[str] = {
 }
 
 
+# Unified Cloudflare Worker proxy configuration
+PROXY_BASE_URL: str = "https://tbx-proxy.shakir-ansarii075.workers.dev/"
+PROXY_MODE_RESOLVE: str = "resolve"  # Recommended: automatic resolution with jsToken extraction
+PROXY_MODE_PAGE: str = "page"        # For debugging: returns raw HTML
+PROXY_MODE_API: str = "api"          # Manual API access when jsToken is known
+
+
 # Default HTTP headers for requests
 headers: Dict[str, str] = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
