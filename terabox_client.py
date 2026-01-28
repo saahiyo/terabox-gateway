@@ -54,6 +54,7 @@ async def fetch_download_link(
             params = {
                 "mode": PROXY_MODE_RESOLVE,
                 "surl": surl,
+                "raw": "1",  # Get raw upstream response instead of simplified format
             }
             if password:
                 params["pwd"] = password
@@ -91,8 +92,25 @@ async def fetch_download_link(
                         "errno": -1,
                     }
                 
+                # With raw=1, the response format is: {"source": "live", "upstream": {...}}
+                # Extract the actual TeraBox API response from upstream
+                if "upstream" in response_data:
+                    api_response = response_data["upstream"]
+                    logging.info(f"Proxy response source: {response_data.get('source', 'unknown')}")
+                else:
+                    # Fallback for other formats
+                    api_response = response_data.get("data", response_data)
+                
+                # Debug logging
+                # import json
+                # logging.info(f"API response (truncated): {json.dumps(api_response, default=str)[:500]}")
+                
+                # With raw=1, we always get the full TeraBox API format
+                # Format: {"errno": 0, "list": [...], "request_id": ..., ...}
+                
                 # Handle TeraBox API errors
-                errno = response_data.get("errno", -1)
+                errno = api_response.get("errno", -1)
+                logging.info(f"Response errno: {errno}")
                 
                 # Handle verification required
                 if errno == 400141:
@@ -107,26 +125,26 @@ async def fetch_download_link(
                 
                 # Handle other errors
                 if errno != 0:
-                    error_msg = response_data.get("errmsg", "Unknown error")
+                    error_msg = api_response.get("errmsg", "Unknown error")
                     logging.error(f"API error {errno}: {error_msg}")
                     return {"error": error_msg, "errno": errno}
                 
                 # Check if we got the file list
-                if "list" not in response_data:
-                    logging.error("No file list in response")
+                if "list" not in api_response:
+                    logging.error(f"No file list in response. Response keys: {list(api_response.keys())}")
                     return {"error": "No files found in response", "errno": -1}
                 
-                files = response_data["list"]
+                files = api_response["list"]
                 logging.info(f"Found {len(files)} items")
                 
-                # If it's a directory, fetch its contents
+                # If it's a directory (only in full API format), fetch its contents
                 if files and files[0].get("isdir") == "1":
                     logging.info("Fetching directory contents")
                     
                     # For directory contents, we need to use the API mode with additional parameters
                     # Extract necessary tokens from the initial response if available
-                    js_token = response_data.get("jsToken")
-                    log_id = response_data.get("dplogid")
+                    js_token = api_response.get("jsToken")
+                    log_id = api_response.get("dplogid")
                     
                     if not js_token:
                         logging.warning("No jsToken in response for directory listing, returning folder info only")
@@ -154,6 +172,10 @@ async def fetch_download_link(
                             return files
                         
                         dir_data = await dir_response.json()
+                        
+                        # Handle wrapped response for directory listing too
+                        if "data" in dir_data:
+                            dir_data = dir_data["data"]
                         
                         if "list" in dir_data and dir_data.get("errno") == 0:
                             files = dir_data["list"]

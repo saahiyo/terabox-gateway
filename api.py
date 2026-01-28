@@ -12,6 +12,7 @@ import asyncio
 from datetime import datetime
 import logging
 import time
+import aiohttp
 
 # Import from our modules
 from config import (
@@ -223,10 +224,8 @@ def api():
                 if "jsToken" not in params or "shorturl" not in params:
                     return jsonify({"error": "Missing required parameters: jsToken and shorturl"}), 400
             elif mode == PROXY_MODE_STREAM:
-                required = ["uk", "shareid", "fid", "jsToken", "type"]
-                missing = [p for p in required if p not in params]
-                if missing:
-                    return jsonify({"error": f"Missing required parameters: {', '.join(missing)}"}), 400
+                if "surl" not in params:
+                    return jsonify({"error": "Missing required parameter: surl"}), 400
             elif mode == PROXY_MODE_SEGMENT:
                 if "url" not in params:
                     return jsonify({"error": "Missing required parameter: url"}), 400
@@ -270,7 +269,7 @@ def api():
                         "examples": {
                             "file_listing": "/api?url=https://teraboxshare.com/s/...",
                             "proxy_resolve": "/api?mode=resolve&surl=abc123",
-                            "proxy_stream": "/api?mode=stream&uk=...&shareid=...&fid=...&jsToken=...&type=M3U8_AUTO_360"
+                            "proxy_stream": "/api?mode=stream&surl=abc123"
                         }
                     }
                 ),
@@ -472,13 +471,10 @@ def help_page():
                                     "stream": {
                                         "description": "Fetch and rewrite M3U8 playlist for HLS streaming",
                                         "parameters": {
-                                            "uk": "Required - User key",
-                                            "shareid": "Required - Share ID",
-                                            "fid": "Required - File ID",
-                                            "jsToken": "Required - JavaScript token",
-                                            "type": "Required - Stream type (e.g., M3U8_AUTO_360)",
+                                            "surl": "Required - Short URL ID",
+                                            "type": "Optional - Stream quality (default: M3U8_AUTO_360)",
                                         },
-                                        "example": "/api?mode=stream&uk=...&shareid=...&fid=...&jsToken=...&type=M3U8_AUTO_360",
+                                        "example": "/api?mode=stream&surl=abc123&type=M3U8_AUTO_360",
                                     },
                                     "segment": {
                                         "description": "Proxy media segments (.ts, .m4s)",

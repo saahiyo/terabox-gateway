@@ -241,7 +241,9 @@ curl "http://localhost:5000/api?mode=api&jsToken=XYZ&shorturl=abc123"
 **Mode: `stream`**
 Fetch and rewrite M3U8 playlist for HLS streaming.
 ```bash
-curl "http://localhost:5000/api?mode=stream&uk=...&shareid=...&fid=...&jsToken=...&type=M3U8_AUTO_360"
+curl "http://localhost:5000/api?mode=stream&surl=abc123"
+# Optional: specify quality
+curl "http://localhost:5000/api?mode=stream&surl=abc123&type=M3U8_AUTO_720"
 ```
 
 **Mode: `segment`**
@@ -322,6 +324,8 @@ The unified proxy supports 5 distinct modes, all accessible via the `/proxy` end
 
 **4. `mode=stream`**
 - Fetches M3U8 playlist and rewrites segment URLs
+- Requires `surl` parameter (short URL ID)
+- Optional `type` parameter for quality selection (default: M3U8_AUTO_360)
 - Enables HLS video streaming in browsers and players
 - Returns modified M3U8 playlist
 

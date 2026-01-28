@@ -1,218 +1,281 @@
-# TeraBox Unified Cloudflare Worker API
+# TBX-Proxy API Usage Guide
 
-A single **Cloudflare Worker** that proxies **TeraBox share pages, APIs, and HLS streaming**, with:
-
-- Automatic `jsToken` extraction
-- Optional cookie forwarding
-- Playable **HLS (M3U8) streaming**
-- Segment (`.ts / .m4s`) proxying
-- Browser, mobile, and VLC compatibility
-
----
+A simple guide to using the TeraBox proxy API. All requests are HTTP GET requests.
 
 ## Base URL
 
-```text
-https://<your-worker>.workers.dev/
 ```
-
-All behavior is controlled using the `mode` query parameter.
-
----
-
-## Supported Modes Overview
-
-| Mode        | Purpose |
-|------------|--------|
-| `resolve`  | Auto extract `jsToken` + fetch share API (recommended) |
-| `page`     | Proxy raw share HTML |
-| `api`      | Manual share API proxy |
-| `stream`   | Fetch + rewrite M3U8 playlist |
-| `segment`  | Proxy media segments (`.ts`, `.m4s`) |
-
----
-
-## 1️⃣ mode=resolve (Recommended)
-
-Automatically:
-- Fetches the TeraBox share page
-- Extracts `jsToken`
-- Calls the share API
-- Returns JSON metadata
-
-**Endpoint**
-```text
-/?mode=resolve&surl=<SHORT_URL_ID>
-```
-
-**Example**
-```text
-/?mode=resolve&surl=abc123
-```
-
-**Notes**
-- Cookies are forwarded **only if provided by the client**
-- Required for private or logged-in shares
-- `jsToken` is short-lived; resolve mode is safest
-
----
-
-## 2️⃣ mode=page (HTML Proxy)
-
-Returns the raw HTML of the TeraBox share page.
-
-**Endpoint**
-```text
-/?mode=page&surl=<SHORT_URL_ID>
-```
-
-**Example**
-```text
-/?mode=page&surl=abc123
-```
-
-**Use cases**
-- Debugging
-- Manual inspection
-- Token investigation
-
----
-
-## 3️⃣ mode=api (Manual Share API)
-
-Directly proxies the TeraBox share API when `jsToken` is already known.
-
-**Endpoint**
-```text
-/?mode=api&jsToken=<JS_TOKEN>&shorturl=<SHORT_URL_ID>
-```
-
-**Optional parameters**
-- `root` (default: `1`)
-- `dplogid`
-
-**Example**
-```text
-/?mode=api&jsToken=XYZ&shorturl=abc123
+https://tbx-proxy.shakir-ansarii075.workers.dev/
 ```
 
 ---
 
-## 4️⃣ mode=stream (HLS Playlist Proxy)
+## Quick Start
 
-Fetches the **TeraBox M3U8 playlist**, then **rewrites all segment URLs**
-so that **every media request goes through the Worker**.
+### 1. Get Share Metadata (Resolve)
 
-**Endpoint**
-```text
-/?mode=stream&uk=...&shareid=...&fid=...&jsToken=...&type=M3U8_AUTO_360
+First, you need to extract and cache the file metadata from a TeraBox share.
+
+```bash
+curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=YOUR_SHORT_URL"
 ```
 
-**What it does**
-- Proxies `/share/streaming`
-- Rewrites segment URLs to `mode=segment`
-- Returns a **playable M3U8**
-
-**Use directly in players**
-- hls.js
-- video.js
-- VLC
-- Android / iOS players
-
----
-
-## 5️⃣ mode=segment (Media Segment Proxy)
-
-Proxies individual video segments (`.ts`, `.m4s`).
-
-This mode is **automatically used** by rewritten playlists — you do not need
-to call it manually.
-
-**Endpoint**
-```text
-/?mode=segment&url=<ENCODED_TS_OR_M4S_URL>
-```
-
-**Purpose**
-- Preserves cookies & headers
-- Avoids CORS issues
-- Prevents direct CDN blocking
-
----
-
-## Cookie Handling
-
-- If the client sends cookies → they are forwarded upstream
-- If no cookies are provided → request proceeds without cookies
-- No hard-coded or server-side cookies are used
-
-**Cookies are required for**
-- Private shares
-- Logged-in content
-- Avoiding empty or restricted responses
-
----
-
-## Error Responses
-
-```json
-{ "error": "Missing surl" }
-```
-
-```json
-{ "error": "Failed to extract jsToken (cookie may be required)" }
-```
-
+**Response:**
 ```json
 {
-  "error": "Invalid or missing mode",
-  "allowed": ["page", "api", "resolve", "stream", "segment"]
+  "source": "live",
+  "data": {
+    "name": "video.mp4",
+    "size": 168800237,
+    "thumb": "https://...",
+    "dlink": "https://...",
+    "fid": "511133506523791",
+    "uk": "4401146149342",
+    "shareid": "10524102871"
+  }
 }
 ```
 
 ---
 
-## Recommended Usage Flow (Streaming)
+### 2. Stream the Video (Get M3U8)
 
-```text
-Player
-  ↓
-/?mode=stream
-  ↓
-Worker rewrites M3U8
-  ↓
-Player requests segments
-  ↓
-/?mode=segment
-  ↓
-TeraBox CDN
+Once resolved, get the M3U8 playlist URL for streaming.
+
+```bash
+curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=stream&surl=YOUR_SHORT_URL"
+```
+
+**Response:** M3U8 playlist content (can be used with VLC, HLS.js, etc.)
+
+---
+
+### 3. Fetch Share Page
+
+Get the TeraBox share page HTML.
+
+```bash
+curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=page&surl=YOUR_SHORT_URL"
 ```
 
 ---
 
-## Best Practices
+## All Modes Explained
 
-- Use `mode=resolve` for metadata access
-- Use `mode=stream` for video playback
-- Always forward cookies for private content
-- Do not cache `jsToken` client-side
-- Treat stream URLs as temporary
+### Mode: `resolve` ⭐ Start Here
+Extracts file metadata and caches it for 24+ hours.
+
+**Required:**
+- `surl` - TeraBox short URL (e.g., `abc123xyz`)
+
+**Optional:**
+- `refresh=1` - Bypass cache and fetch fresh data
+- `raw=1` - Return raw upstream response (debugging)
+
+**Example:**
+```bash
+# Get and cache metadata
+curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=abc123"
+
+# Force refresh from TeraBox
+curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=abc123&refresh=1"
+```
+
+**Success Response (200):**
+```json
+{
+  "source": "live",
+  "data": {
+    "name": "filename.mp4",
+    "size": 168800237,
+    "thumb": "https://...",
+    "dlink": "https://...",
+    "fid": "...",
+    "uk": "...",
+    "shareid": "...",
+    "stored_at": 1609459200
+  }
+}
+```
+
+---
+
+### Mode: `stream`
+Returns M3U8 playlist for video playback. **Requires calling `resolve` first.**
+
+**Required:**
+- `surl` - Same short URL from resolve
+
+**Optional:**
+- `type` - Video quality (default: `M3U8_AUTO_360`)
+  - `M3U8_AUTO_360` - Auto quality (recommended)
+  - `M3U8_AUTO_720`
+  - Other quality options available
+
+**Example:**
+```bash
+curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=stream&surl=abc123"
+```
+
+**Response:** M3U8 playlist file (text/vnd.apple.mpegurl)
+
+---
+
+### Mode: `page`
+Fetches the TeraBox share page as HTML.
+
+**Required:**
+- `surl` - Short URL
+
+**Example:**
+```bash
+curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=page&surl=abc123"
+```
+
+**Response:** HTML page content
+
+---
+
+### Mode: `api`
+Direct API call to TeraBox (advanced).
+
+**Required:**
+- `jsToken` - JavaScript token (extracted from page)
+- `shorturl` - Short URL
+
+**Example:**
+```bash
+curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=api&jsToken=TOKEN123&shorturl=abc123"
+```
+
+**Response:** Raw JSON from TeraBox API
+
+---
+
+### Mode: `segment`
+Proxies video segments (internal use, called automatically by M3U8 playlist).
+
+**Required:**
+- `url` - Full segment URL
+
+**Example:**
+```bash
+curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=segment&url=https://..."
+```
 
 ---
 
 ## Common Use Cases
 
-- Telegram / Discord bots
-- Web-based HLS players
-- Download link resolvers
-- File browsers
-- Backend-only streaming APIs
-- Cloudflare Workers + KV caching
+### Use Case 1: Stream Video in Browser
+
+```bash
+# Step 1: Get metadata and cache it
+curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=abc123"
+
+# Step 2: Get M3U8 URL
+M3U8_URL="https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=stream&surl=abc123"
+
+# Step 3: Use in video player
+# VLC: vlc "$M3U8_URL"
+# HLS.js: video.src = "$M3U8_URL"
+# mpv: mpv "$M3U8_URL"
+```
+
+### Use Case 2: Get File Info
+
+```bash
+curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=abc123" \
+  | jq '.data | {name, size, thumb}'
+```
+
+### Use Case 3: Refresh Cached Data
+
+If the TeraBox link was updated:
+
+```bash
+curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=abc123&refresh=1"
+```
+
+### Use Case 4: Download with Signature
+
+After resolving, use the `dlink` URL directly with a downloader:
+
+```bash
+curl -o video.mp4 "$(curl -s 'https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=abc123' | jq -r '.data.dlink')"
+```
 
 ---
 
-## Legal / Disclaimer
+## Error Codes & Fixes
 
-This project is for **educational and interoperability purposes only**.  
-You are responsible for complying with TeraBox terms of service and
-applicable laws.
+| Code | Error | Fix |
+|------|-------|-----|
+| 400 | Missing parameter | Check required params (surl, jsToken, etc.) |
+| 403 | Failed to extract token | Share may be private or link expired |
+| 404 | Share not in cache | Call `mode=resolve` first |
+| 500 | Incomplete metadata | Try `mode=resolve&refresh=1` |
+| 502 | Bad upstream response | TeraBox API may be down |
+
+---
+
+## Response Format
+
+All successful responses are JSON:
+
+```json
+{
+  "source": "live|kv",
+  "data": { ... }
+}
+```
+
+Error responses:
+
+```json
+{
+  "error": "Error message",
+  "required": ["param1", "param2"]
+}
+```
+
+---
+
+## Tips & Tricks
+
+✅ **Always call `resolve` first** before using `stream`
+
+✅ **Cache is automatic** — metadata is cached for ~24 hours
+
+✅ **Use `refresh=1`** if data seems stale
+
+✅ **M3U8 playlists are rewritten** — segments are automatically proxied through the worker
+
+✅ **Thumbnails available** in resolve response (`data.thumb`)
+
+---
+
+## Testing with cURL
+
+```bash
+# Test resolve
+curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=abc123" | jq
+
+# Test stream (get M3U8)
+curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=stream&surl=abc123"
+
+# Test missing parameter
+curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=api"
+
+# Pretty-print JSON
+curl -s "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=abc123" | jq .
+```
+
+---
+
+## Need Help?
+
+- **Worker not deployed?** Run `wrangler deploy`
+- **KV not configured?** Check `wrangler.toml` has correct KV namespace
+- **Getting 500 errors?** Try with `&raw=1` to see upstream response
+- **Link expired?** Use `&refresh=1` to re-fetch from TeraBox
