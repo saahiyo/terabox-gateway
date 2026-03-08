@@ -1,5 +1,8 @@
 # TeraBox Gateway API
 
+![design](https://github.com/user-attachments/assets/8129a66c-99b3-4487-9859-8ec7999a6475)
+
+
 A lightweight Flask-based API for extracting file information and direct download links from TeraBox share URLs.
 
 This project provides:
