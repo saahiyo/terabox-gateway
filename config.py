@@ -25,6 +25,12 @@ ALLOWED_HOSTS: set[str] = {
     "www.terabox.com",
     "1024terabox.com",
     "www.1024terabox.com",
+    "teraboxlink.com",
+    "terasharefile.com",
+    "terafileshare.com",
+    "terasharelink.com",
+    "teraboxshare.com",
+    "www.teraboxshare.com"
 }
 
 
