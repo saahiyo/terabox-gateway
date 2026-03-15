@@ -2,6 +2,9 @@
 
 A lightweight Flask-based API for extracting file information and direct download links from TeraBox share URLs.
 
+![design](https://github.com/user-attachments/assets/8129a66c-99b3-4487-9859-8ec7999a6475)
+
+
 This project provides:
 - **Web API** with endpoints for listing files and retrieving direct links
 - **Unified Cloudflare Worker Proxy** for optimized TeraBox API access
