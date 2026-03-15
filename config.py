@@ -4,6 +4,7 @@ This module contains all configuration settings, constants, headers,
 and cookie loading logic used throughout the application.
 """
 
+import functools
 import logging
 import os
 from typing import Dict
@@ -52,6 +53,7 @@ headers: Dict[str, str] = {
 }
 
 
+@functools.lru_cache(maxsize=1)
 def load_cookies() -> dict[str, str]:
     """Load cookies from environment variables or a local file.
     
