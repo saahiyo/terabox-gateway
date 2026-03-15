@@ -1,7 +1,6 @@
-Flask==2.2.5
-Werkzeug==2.2.3
+Flask>=3.1,<4
+Werkzeug>=3.1,<4
 aiohttp>=3.8,<4
-requests>=2.31,<3
 # Optional deps for production servers or CORS
 # hypercorn>=0.14
 # waitress>=2.1

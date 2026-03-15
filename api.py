@@ -1,6 +1,7 @@
 """TeraBox API Gateway - Main Flask Application.
 
 This module defines the Flask application and all API route handlers.
+Flask 3.x is used for native async route support.
 Business logic has been separated into dedicated modules:
 - config.py: Configuration and constants
 - utils.py: Utility functions
@@ -8,7 +9,6 @@ Business logic has been separated into dedicated modules:
 """
 
 from flask import Flask, request, jsonify, Response
-import asyncio
 from datetime import datetime, timezone
 import logging
 import time
@@ -32,31 +32,9 @@ from terabox_client import (
     _gather_format_file_info,
     _normalize_api2_items,
 )
+from rate_limiter import rate_limit
+import cache
 
-
-def _run_async(coro):
-    """Run an async coroutine safely from sync Flask handlers.
-    
-    Reuses an existing event loop if available, otherwise creates one.
-    This avoids the overhead and Python 3.10+ issues of calling
-    asyncio.run() multiple times.
-    """
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # Already inside an event loop (e.g. some ASGI servers)
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                return pool.submit(asyncio.run, coro).result()
-        return loop.run_until_complete(coro)
-    except RuntimeError:
-        # No current event loop — create one
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(coro)
-        finally:
-            loop.close()
 
 
 def format_response_time(seconds: float) -> str:
@@ -167,7 +145,7 @@ async def _proxy_request(url: str, params: dict, cookies: dict) -> dict:
                             "status_code": response.status,
                             "details": error_data
                         }
-                    except:
+                    except Exception:
                         return {
                             "error": f"Proxy returned status {response.status}",
                             "status_code": response.status,
@@ -193,16 +171,13 @@ async def _proxy_request(url: str, params: dict, cookies: dict) -> dict:
 
 
 @app.route("/api", methods=["GET"])
-def api():
+@rate_limit
+async def api():
     """Unified API endpoint - handles file information and proxy modes.
     
     Supports two usage patterns:
     1. Legacy mode: /api?url=... (backward compatible file listing)
     2. Proxy modes: /api?mode=... (resolve, page, api, stream, segment)
-    
-    This is a synchronous wrapper around the async helpers so the app
-    can run under standard WSGI servers (and Vercel). Internally we
-    call asyncio.run to execute the async logic.
     """
     try:
         start_time = time.time()
@@ -263,7 +238,7 @@ def api():
                 cookies = load_cookies()
             
             # Make proxy request
-            result = _run_async(_proxy_request(PROXY_BASE_URL, params, cookies))
+            result = await _proxy_request(PROXY_BASE_URL, params, cookies)
             
             if "error" in result:
                 return jsonify(result), result.get("status_code", 500)
@@ -308,11 +283,24 @@ def api():
         password = request.args.get("pwd", "")
         logging.info(f"API request for URL: {url}")
 
-        # Load cookies to include in response
-        cookies = load_cookies()
+        # Check cache first
+        cached = cache.get(url, password)
+        if cached is not None:
+            formatted_files = await _gather_format_file_info(cached)
+            response_time = format_response_time(time.time() - start_time)
+            return jsonify(
+                {
+                    "status": "success",
+                    "url": url,
+                    "files": formatted_files,
+                    "total_files": len(formatted_files),
+                    "response_time": response_time,
+                    "cached": True,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
 
-        # Run async fetch in event loop
-        link_data = _run_async(fetch_download_link(url, password))
+        link_data = await fetch_download_link(url, password)
 
         # Check if error occurred
         if isinstance(link_data, dict) and "error" in link_data:
@@ -333,7 +321,8 @@ def api():
 
         # Format file information
         if link_data:
-            formatted_files = _run_async(_gather_format_file_info(link_data))
+            cache.put(url, link_data, password)
+            formatted_files = await _gather_format_file_info(link_data)
             response_time = format_response_time(time.time() - start_time)
 
             return jsonify(
@@ -364,8 +353,9 @@ def api():
 
 
 @app.route("/api2", methods=["GET"])
-def api2():
-    """Alternative API endpoint - with direct download links (sync wrapper)."""
+@rate_limit
+async def api2():
+    """Alternative API endpoint - with direct download links."""
     try:
         start_time = time.time()
         url = request.args.get("url")
@@ -397,7 +387,7 @@ def api2():
 
         password = request.args.get("pwd", "")
 
-        link_data = _run_async(fetch_direct_links(url, password))
+        link_data = await fetch_direct_links(url, password)
 
         # Check if error occurred
         if isinstance(link_data, dict) and "error" in link_data:
@@ -415,7 +405,7 @@ def api2():
 
         if link_data:
             # Normalize file objects to match /api shape and include direct_link when available
-            formatted_files = _run_async(_normalize_api2_items(link_data))
+            formatted_files = await _normalize_api2_items(link_data)
             response_time = format_response_time(time.time() - start_time)
             return jsonify(
                 {
