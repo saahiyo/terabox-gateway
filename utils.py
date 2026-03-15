@@ -73,7 +73,7 @@ def extract_thumbnail_dimensions(url: str) -> str:
     return "original"
 
 
-async def get_formatted_size(size_bytes: Union[int, str]) -> str:
+def get_formatted_size(size_bytes: Union[int, str]) -> str:
     """Convert bytes to human-readable format.
     
     Args:

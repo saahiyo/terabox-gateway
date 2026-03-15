@@ -211,7 +211,7 @@ async def format_file_info(file_data: Dict[str, Any]) -> Dict[str, Any]:
 
     return {
         "filename": file_data.get("server_filename", "Unknown"),
-        "size": await get_formatted_size(file_data.get("size", 0)),
+        "size": get_formatted_size(file_data.get("size", 0)),
         "size_bytes": file_data.get("size", 0),
         "download_link": file_data.get("dlink", ""),
         "is_directory": file_data.get("isdir") == "1",
@@ -277,7 +277,7 @@ async def fetch_direct_links(
                 results.append(
                     {
                         "filename": item.get("server_filename", "Unknown"),
-                        "size": await get_formatted_size(item.get("size", 0)),
+                        "size": get_formatted_size(item.get("size", 0)),
                         "size_bytes": item.get("size", 0),
                         "link": dlink,
                         "direct_link": direct_link,
@@ -327,7 +327,7 @@ async def _normalize_api2_items(items: List[Dict[str, Any]]) -> List[Dict[str, A
             size_h = (
                 item.get("size")
                 if isinstance(item.get("size"), str)
-                else await get_formatted_size(item.get("size", 0))
+                else get_formatted_size(item.get("size", 0))
             )
             size_b = item.get("size_bytes", item.get("size", 0))
             download = (

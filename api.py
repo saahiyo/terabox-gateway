@@ -9,13 +9,14 @@ Business logic has been separated into dedicated modules:
 
 from flask import Flask, request, jsonify, Response
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import time
 import aiohttp
 
 # Import from our modules
 from config import (
+    headers,
     load_cookies,
     PROXY_BASE_URL,
     PROXY_MODE_RESOLVE,
@@ -31,6 +32,31 @@ from terabox_client import (
     _gather_format_file_info,
     _normalize_api2_items,
 )
+
+
+def _run_async(coro):
+    """Run an async coroutine safely from sync Flask handlers.
+    
+    Reuses an existing event loop if available, otherwise creates one.
+    This avoids the overhead and Python 3.10+ issues of calling
+    asyncio.run() multiple times.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Already inside an event loop (e.g. some ASGI servers)
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(asyncio.run, coro).result()
+        return loop.run_until_complete(coro)
+    except RuntimeError:
+        # No current event loop — create one
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(coro)
+        finally:
+            loop.close()
 
 
 def format_response_time(seconds: float) -> str:
@@ -57,15 +83,6 @@ def create_app() -> Flask:
     """
 
     app = Flask(__name__, static_folder="public", static_url_path="/public")
-
-    # Basic CORS for browser clients (no extra dependency)
-    @app.after_request
-    def add_cors_headers(resp: Response) -> Response:
-        resp.headers["Access-Control-Allow-Origin"] = "*"
-        resp.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
-        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        return resp
-
     return app
 
 
@@ -87,8 +104,8 @@ try:
     from endpoints import bp as endpoints_bp  # type: ignore
 
     app.register_blueprint(endpoints_bp)
-except Exception:
-    # No blueprint found or failed to import; continue with routes defined below
+except ImportError:
+    # No blueprint found; continue with routes defined below
     pass
 
 
@@ -246,7 +263,7 @@ def api():
                 cookies = load_cookies()
             
             # Make proxy request
-            result = asyncio.run(_proxy_request(PROXY_BASE_URL, params, cookies))
+            result = _run_async(_proxy_request(PROXY_BASE_URL, params, cookies))
             
             if "error" in result:
                 return jsonify(result), result.get("status_code", 500)
@@ -295,7 +312,7 @@ def api():
         cookies = load_cookies()
 
         # Run async fetch in event loop
-        link_data = asyncio.run(fetch_download_link(url, password))
+        link_data = _run_async(fetch_download_link(url, password))
 
         # Check if error occurred
         if isinstance(link_data, dict) and "error" in link_data:
@@ -316,7 +333,7 @@ def api():
 
         # Format file information
         if link_data:
-            formatted_files = asyncio.run(_gather_format_file_info(link_data))
+            formatted_files = _run_async(_gather_format_file_info(link_data))
             response_time = format_response_time(time.time() - start_time)
 
             return jsonify(
@@ -380,7 +397,7 @@ def api2():
 
         password = request.args.get("pwd", "")
 
-        link_data = asyncio.run(fetch_direct_links(url, password))
+        link_data = _run_async(fetch_direct_links(url, password))
 
         # Check if error occurred
         if isinstance(link_data, dict) and "error" in link_data:
@@ -398,7 +415,7 @@ def api2():
 
         if link_data:
             # Normalize file objects to match /api shape and include direct_link when available
-            formatted_files = asyncio.run(_normalize_api2_items(link_data))
+            formatted_files = _run_async(_normalize_api2_items(link_data))
             response_time = format_response_time(time.time() - start_time)
             return jsonify(
                 {
