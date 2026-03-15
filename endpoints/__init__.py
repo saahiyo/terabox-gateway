@@ -13,7 +13,7 @@ the core routes defined in the main application.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request
 
 # Public blueprint object imported by the app
@@ -23,7 +23,7 @@ __all__ = ["bp"]
 
 
 def _now_iso() -> str:
-    return datetime.utcnow().isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 @bp.get("/")

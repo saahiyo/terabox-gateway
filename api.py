@@ -128,7 +128,7 @@ def index():
                 "/health": "Health check",
             },
             "contact": "@Saahiyo",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     )
 
@@ -136,7 +136,7 @@ def index():
 @app.route("/health")
 def health():
     """Health check endpoint"""
-    return jsonify({"status": "healthy", "timestamp": datetime.utcnow().isoformat()})
+    return jsonify({"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()})
 
 
 async def _proxy_request(url: str, params: dict, cookies: dict) -> dict:
@@ -344,7 +344,7 @@ def api():
                     "files": formatted_files,
                     "total_files": len(formatted_files),
                     "response_time": response_time,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             )
         else:
@@ -424,7 +424,7 @@ def api2():
                     "files": formatted_files,
                     "total_files": len(formatted_files),
                     "response_time": response_time,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 }
             )
         else:
