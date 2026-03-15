@@ -1,6 +1,6 @@
 # TeraBox Gateway API
 
-A lightweight Flask-based API for extracting file information and direct download links from TeraBox share URLs.
+A lightweight Flask 3.x async API for extracting file information and direct download links from TeraBox share URLs.
 
 ![design](https://github.com/user-attachments/assets/8129a66c-99b3-4487-9859-8ec7999a6475)
 
@@ -11,7 +11,7 @@ This project provides:
 - **Vercel-ready deployment** configuration
 - **Flexible cookie authentication** with support for simple string or JSON formats
 
-The API uses `aiohttp` for asynchronous requests and leverages a unified Cloudflare Worker proxy with mode-based operations for efficient TeraBox API interaction.
+The API uses Flask 3.x native async support with `aiohttp` for asynchronous requests and leverages a unified Cloudflare Worker proxy with mode-based operations for efficient TeraBox API interaction.
 
 ---
 
@@ -29,6 +29,16 @@ The API uses `aiohttp` for asynchronous requests and leverages a unified Cloudfl
   - Full JSON format: Supports multiple cookie fields
   - Environment variable or file-based configuration
 
+- **Rate Limiting**:
+  - Per-IP sliding-window rate limiter
+  - Configurable limits via environment variables
+  - Returns `429 Too Many Requests` with `Retry-After` header
+
+- **Response Caching**:
+  - In-memory LRU cache with TTL expiration
+  - Reduces redundant upstream requests on repeated lookups
+  - Configurable TTL and max cache size
+
 - **Production Ready**:
   - CORS enabled for browser clients
   - Vercel deployment configuration included
@@ -44,11 +54,12 @@ terabox-gateway/
 ├── config.py             # Configuration and constants (proxy URLs, headers)
 ├── terabox_client.py     # TeraBox API client with unified proxy integration
 ├── utils.py              # Utility functions (validation, formatting)
+├── rate_limiter.py       # Per-IP sliding-window rate limiter
+├── cache.py              # In-memory LRU cache with TTL expiration
 ├── main.py               # Entry point for running Flask locally
 ├── .env                  # Environment variables (not tracked in git)
 ├── .env.example          # Example environment configuration
 ├── requirements.txt      # Python dependencies
-├── pyproject.toml        # Project metadata
 ├── vercel.json           # Vercel deployment configuration
 ├── tboxproxy_usage.md    # Unified proxy API documentation
 ├── .gitignore            # Git ignore file
@@ -61,12 +72,11 @@ terabox-gateway/
 
 ## Requirements
 
-- **Python 3.9+**
+- **Python 3.10+**
 - **Dependencies**:
-  - `Flask==2.2.5`
-  - `Werkzeug==2.2.3`
+  - `Flask[async]>=3.1,<4`
+  - `Werkzeug>=3.1,<4`
   - `aiohttp>=3.8,<4`
-  - `requests>=2.31,<3`
 
 ### Installation
 
@@ -156,44 +166,6 @@ Provides detailed inline documentation and usage examples.
 curl http://localhost:5000/help
 ```
 
-#### `GET /api` - Get File Information
-Retrieves file metadata for a TeraBox share link.
-
-**Parameters**:
-- `url` (required): TeraBox share URL
-- `pwd` (optional): Password for protected links
-
-**Example**:
-```bash
-curl "http://localhost:5000/api?url=https://1024terabox.com/s/1LNr3tyl5pI5KUM8BecGtyQ"
-```
-
-**Response** (success):
-```json
-{
-  "files": [
-    {
-      "download_link": "https://d.terabox.app/file/...?fid=xxx&dstime=xxx&sign=xxx...",
-      "filename": "VID_202.ts",
-      "fs_id": "305771137601214",
-      "is_directory": false,
-      "path": "/2025-10-06 01-28/VID_202.ts",
-      "size": "6.57 MB",
-      "size_bytes": 6891328,
-      "thumbnails": {
-        "60x60": "https://data.terabox.app/thumbnail/...?size=c60_u60&quality=100...",
-        "140x90": "https://data.terabox.app/thumbnail/...?size=c140_u90&quality=100...",
-        "360x270": "https://data.terabox.app/thumbnail/...?size=c360_u270&quality=100...",
-        "850x580": "https://data.terabox.app/thumbnail/...?size=c850_u580&quality=100..."
-      }
-    }
-  ],
-  "status": "success",
-  "timestamp": "2026-01-17T11:30:32.672789",
-  "total_files": 1,
-  "url": "https://1024terabox.com/s/1LNr3tyl5pI5KUM8BecGtyQ"
-}
-```
 
 #### `GET /api2` - Get Direct Download Links
 Retrieves file metadata and resolves direct download links by following redirects.
@@ -270,6 +242,10 @@ The API validates and supports the following TeraBox domains:
 - `teraboxshare.com`
 - `terabox.com`
 - `1024terabox.com`
+- `teraboxlink.com`
+- `terasharefile.com`
+- `terafileshare.com`
+- `terasharelink.com`
 
 Both `http://` and `https://` protocols are supported.
 
@@ -287,6 +263,10 @@ You can configure the API using environment variables in your `.env` file:
 | `HOST` | Server host address | `0.0.0.0` |
 | `PORT` | Server port | `5000` |
 | `FLASK_DEBUG` | Enable Flask debug mode (`1` or `0`) | `0` |
+| `RATE_LIMIT` | Max requests per window per IP | `30` |
+| `RATE_WINDOW` | Rate limit window size in seconds | `60` |
+| `CACHE_TTL` | Cache entry time-to-live in seconds | `60` |
+| `CACHE_MAX_SIZE` | Maximum number of cached entries | `500` |
 
 **Cookie Priority**:
 1. `COOKIE_JSON` (from `.env`)
@@ -453,7 +433,7 @@ For questions or support, contact [@Saahiyo](https://github.com/Saahiyo)
 
 ## Acknowledgments
 
-- Built with Flask and aiohttp for efficient async operations
+- Built with Flask 3.x (native async) and aiohttp for efficient async operations
 - Unified Cloudflare Worker proxy for optimized API access
 - Designed for seamless Vercel deployment
 - Supports multiple TeraBox domains and share URL formats
