@@ -24,6 +24,7 @@ from config import (
     PROXY_MODE_API,
     PROXY_MODE_STREAM,
     PROXY_MODE_SEGMENT,
+    PROXY_MODE_THUMBNAIL,
 )
 from utils import is_valid_share_url
 from terabox_client import (
@@ -188,7 +189,7 @@ async def api():
         if mode:
             # Validate mode parameter
             valid_modes = [PROXY_MODE_RESOLVE, PROXY_MODE_PAGE, PROXY_MODE_API, 
-                          PROXY_MODE_STREAM, PROXY_MODE_SEGMENT]
+                          PROXY_MODE_STREAM, PROXY_MODE_SEGMENT, PROXY_MODE_THUMBNAIL]
             
             if mode not in valid_modes:
                 return jsonify({
@@ -221,6 +222,9 @@ async def api():
             elif mode == PROXY_MODE_SEGMENT:
                 if "url" not in params:
                     return jsonify({"error": "Missing required parameter: url"}), 400
+            elif mode == PROXY_MODE_THUMBNAIL:
+                if "fid" not in params:
+                    return jsonify({"error": "Missing required parameter: fid"}), 400
             
             # Forward cookies from client request if present
             cookies = {}

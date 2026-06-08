@@ -42,6 +42,8 @@ PROXY_MODE_PAGE: str = "page"        # For debugging: returns raw HTML
 PROXY_MODE_API: str = "api"          # Manual API access when jsToken is known
 PROXY_MODE_STREAM: str = "stream"    # HLS playlist proxy with segment URL rewriting
 PROXY_MODE_SEGMENT: str = "segment"  # Media segment (.ts, .m4s) proxy
+PROXY_MODE_THUMBNAIL: str = "thumbnail"  # Non-expiring media thumbnail proxy
+
 
 
 # Default HTTP headers for requests
