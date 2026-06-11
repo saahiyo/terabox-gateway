@@ -43,6 +43,8 @@ PROXY_MODE_API: str = "api"          # Manual API access when jsToken is known
 PROXY_MODE_STREAM: str = "stream"    # HLS playlist proxy with segment URL rewriting
 PROXY_MODE_SEGMENT: str = "segment"  # Media segment (.ts, .m4s) proxy
 PROXY_MODE_THUMBNAIL: str = "thumbnail"  # Non-expiring media thumbnail proxy
+PROXY_MODE_LOOKUP: str = "lookup"    # Query D1 cache (fast)
+PROXY_MODE_HEALTH: str = "health"    # Service health check
 
 
 

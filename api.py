@@ -25,6 +25,8 @@ from config import (
     PROXY_MODE_STREAM,
     PROXY_MODE_SEGMENT,
     PROXY_MODE_THUMBNAIL,
+    PROXY_MODE_LOOKUP,
+    PROXY_MODE_HEALTH,
 )
 from utils import is_valid_share_url
 from terabox_client import (
@@ -91,25 +93,7 @@ except ImportError:
 # =============== API ROUTES ===============
 
 
-@app.route("/")
-def index():
-    """API information endpoint"""
-    return jsonify(
-        {
-            "name": "TeraBox API",
-            "version": "2.0",
-            "status": "operational",
-            "endpoints": {
-                "/": "API information",
-                "/api": "Unified endpoint - file listing and proxy modes (resolve, page, api, stream, segment)",
-                "/api2": "Fetch files with direct download links",
-                "/help": "Detailed usage instructions",
-                "/health": "Health check",
-            },
-            "contact": "@Saahiyo",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-    )
+
 
 
 @app.route("/health")
@@ -118,19 +102,27 @@ def health():
     return jsonify({"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()})
 
 
-async def _proxy_request(url: str, params: dict, cookies: dict) -> dict:
+async def _proxy_request(url: str, params: dict, cookies: dict, req_headers: dict = None) -> dict:
     """Internal helper to make async proxy requests.
     
     Args:
         url: Proxy base URL
         params: Query parameters
         cookies: Cookie dictionary
+        req_headers: Optional client headers to forward
         
     Returns:
         dict: Response data with content, status, headers, and content_type
     """
     try:
-        async with aiohttp.ClientSession(cookies=cookies, headers=headers) as session:
+        from config import headers as default_headers
+        proxy_headers = default_headers.copy()
+        if req_headers:
+            for k, v in req_headers.items():
+                if k.lower() in ["x-admin-key", "authorization"]:
+                    proxy_headers[k] = v
+
+        async with aiohttp.ClientSession(cookies=cookies, headers=proxy_headers) as session:
             async with session.get(url, params=params) as response:
                 content = await response.read()
                 
@@ -171,15 +163,31 @@ async def _proxy_request(url: str, params: dict, cookies: dict) -> dict:
 
 
 
+@app.route("/")
+def index():
+    """API information endpoint"""
+    return jsonify(
+        {
+            "name": "TeraBox API",
+            "version": "2.0",
+            "status": "operational",
+            "endpoints": {
+                "/": "API information",
+                "/api": "Unified endpoint - file listing and proxy modes (resolve, page, api, stream, segment)",
+                "/api2": "Fetch files with direct download links",
+                "/health": "Health check",
+                "/help": "Detailed usage instructions",
+            },
+            "contact": "@Saahiyo",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+
 @app.route("/api", methods=["GET"])
 @rate_limit
 async def api():
-    """Unified API endpoint - handles file information and proxy modes.
-    
-    Supports two usage patterns:
-    1. Legacy mode: /api?url=... (backward compatible file listing)
-    2. Proxy modes: /api?mode=... (resolve, page, api, stream, segment)
-    """
+    """Unified API endpoint - handles file information and proxy modes."""
     try:
         start_time = time.time()
         mode = request.args.get("mode")
@@ -188,8 +196,16 @@ async def api():
         # ===== PROXY MODE LOGIC =====
         if mode:
             # Validate mode parameter
-            valid_modes = [PROXY_MODE_RESOLVE, PROXY_MODE_PAGE, PROXY_MODE_API, 
-                          PROXY_MODE_STREAM, PROXY_MODE_SEGMENT, PROXY_MODE_THUMBNAIL]
+            valid_modes = [
+                PROXY_MODE_RESOLVE,
+                PROXY_MODE_PAGE,
+                PROXY_MODE_API,
+                PROXY_MODE_STREAM,
+                PROXY_MODE_SEGMENT,
+                PROXY_MODE_THUMBNAIL,
+                PROXY_MODE_LOOKUP,
+                PROXY_MODE_HEALTH,
+            ]
             
             if mode not in valid_modes:
                 return jsonify({
@@ -210,6 +226,9 @@ async def api():
             if mode == PROXY_MODE_RESOLVE:
                 if "surl" not in params:
                     return jsonify({"error": "Missing required parameter: surl"}), 400
+            elif mode == PROXY_MODE_LOOKUP:
+                if "surl" not in params and "fid" not in params:
+                    return jsonify({"error": "Missing required parameter: surl or fid"}), 400
             elif mode == PROXY_MODE_PAGE:
                 if "surl" not in params:
                     return jsonify({"error": "Missing required parameter: surl"}), 400
@@ -225,6 +244,8 @@ async def api():
             elif mode == PROXY_MODE_THUMBNAIL:
                 if "fid" not in params:
                     return jsonify({"error": "Missing required parameter: fid"}), 400
+            elif mode == PROXY_MODE_HEALTH:
+                pass
             
             # Forward cookies from client request if present
             cookies = {}
@@ -241,17 +262,35 @@ async def api():
             if not cookies:
                 cookies = load_cookies()
             
+            # Extract client headers to forward
+            req_headers = {}
+            for k, v in request.headers.items():
+                if k.lower() in ["x-admin-key", "authorization"]:
+                    req_headers[k] = v
+            
             # Make proxy request
-            result = await _proxy_request(PROXY_BASE_URL, params, cookies)
+            result = await _proxy_request(PROXY_BASE_URL, params, cookies, req_headers=req_headers)
             
             if "error" in result:
                 return jsonify(result), result.get("status_code", 500)
             
-            # Return response with appropriate content type
+            # Return response with appropriate content type, filtering out transport/encoding headers
+            excluded_headers = {
+                "transfer-encoding",
+                "content-encoding",
+                "content-length",
+                "connection",
+                "keep-alive",
+                "host",
+            }
+            response_headers = {
+                k: v for k, v in result["headers"].items()
+                if k.lower() not in excluded_headers
+            }
             return Response(
                 result["content"],
                 status=result["status"],
-                headers=result["headers"],
+                headers=response_headers,
                 content_type=result["content_type"]
             )
         
@@ -354,6 +393,64 @@ async def api():
             ),
             500,
         )
+
+
+@app.route("/admin/<path:subpath>", methods=["GET"])
+@rate_limit
+async def admin_proxy(subpath):
+    """Proxy admin requests to the upstream worker."""
+    try:
+        base_url = PROXY_BASE_URL.rstrip("/")
+        upstream_url = f"{base_url}/admin/{subpath}"
+        
+        # Forward query parameters
+        params = dict(request.args)
+        
+        # Forward cookies
+        cookies = {}
+        if "Cookie" in request.headers:
+            cookie_header = request.headers.get("Cookie")
+            for cookie in cookie_header.split(";"):
+                cookie = cookie.strip()
+                if "=" in cookie:
+                    key, value = cookie.split("=", 1)
+                    cookies[key.strip()] = value.strip()
+        if not cookies:
+            cookies = load_cookies()
+            
+        # Extract forwardable headers
+        req_headers = {}
+        for k, v in request.headers.items():
+            if k.lower() in ["x-admin-key", "authorization"]:
+                req_headers[k] = v
+                
+        # Make proxy request
+        result = await _proxy_request(upstream_url, params, cookies, req_headers=req_headers)
+        
+        if "error" in result:
+            return jsonify(result), result.get("status_code", 500)
+            
+        excluded_headers = {
+            "transfer-encoding",
+            "content-encoding",
+            "content-length",
+            "connection",
+            "keep-alive",
+            "host",
+        }
+        response_headers = {
+            k: v for k, v in result["headers"].items()
+            if k.lower() not in excluded_headers
+        }
+        return Response(
+            result["content"],
+            status=result["status"],
+            headers=response_headers,
+            content_type=result["content_type"]
+        )
+    except Exception as e:
+        logging.error(f"Admin proxy error: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api2", methods=["GET"])

@@ -1,6 +1,6 @@
 # TBX-Proxy API Usage Guide
 
-A simple guide to using the TeraBox proxy API. All requests are HTTP GET requests.
+A simple guide to using the TeraBox proxy API. All requests are HTTP GET requests with CORS support.
 
 ## Base URL
 
@@ -14,7 +14,7 @@ https://tbx-proxy.shakir-ansarii075.workers.dev/
 
 ### 1. Get Share Metadata (Resolve)
 
-First, you need to extract and cache the file metadata from a TeraBox share.
+First, extract and cache the file metadata from a TeraBox share.
 
 ```bash
 curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=YOUR_SHORT_URL"
@@ -50,58 +50,103 @@ curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=stream&surl=YOUR_SHO
 
 ---
 
-### 3. Fetch Share Page
+## All Modes
 
-Get the TeraBox share page HTML.
-
-```bash
-curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=page&surl=YOUR_SHORT_URL"
-```
+| Mode / Path | Purpose | Required Params / Headers |
+|------|---------|-----------------|
+| `resolve` | Extract & cache metadata | `surl` |
+| `lookup` | Query D1 cache (fast) | `surl` or `fid` |
+| `stream` | Get M3U8 playlist | `surl` |
+| `page` | Fetch TeraBox HTML page | `surl` |
+| `api` | Direct API call | `jsToken`, `shorturl` |
+| `segment` | Proxy video segments | `url` |
+| `health` | Service health check | none |
+| `/admin/*` | Admin analytics & DB inspection | `key` param or `x-admin-key` header |
 
 ---
 
-## All Modes Explained
+## Mode: `resolve` ⭐ Start Here
 
-### Mode: `resolve` ⭐ Start Here
-Extracts file metadata and caches it for 24+ hours.
+Extracts file metadata and caches in D1.
 
 **Required:**
 - `surl` - TeraBox short URL (e.g., `abc123xyz`)
 
 **Optional:**
-- `refresh=1` - Bypass cache and fetch fresh data
-- `raw=1` - Return raw upstream response (debugging)
+- `refresh=1` - Bypass all caches, fetch fresh from TeraBox
+- `raw=1` - Return full upstream data (checks D1 cache first)
 
-**Example:**
+**Cache Behavior:**
+| Query | Cache Check | Speed |
+|-------|-------------|-------|
+| `?mode=resolve&surl=...` | D1 → Upstream | ~500ms first, ~10ms cached |
+| `?mode=resolve&surl=...&raw=1` | D1 → Upstream | ~10ms cached |
+| `?mode=resolve&surl=...&refresh=1` | None → Upstream | ~1-2s always |
+
+**Examples:**
 ```bash
-# Get and cache metadata
-curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=abc123"
+# First time - fetches from TeraBox and caches
+curl ".../?mode=resolve&surl=abc123"
+# Response: {"source": "live", "data": {...}}
 
-# Force refresh from TeraBox
-curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=abc123&refresh=1"
-```
+# Second time - returns from D1 cache
+curl ".../?mode=resolve&surl=abc123"
+# Response: {"source": "d1", "data": {...}}
 
-**Success Response (200):**
-```json
-{
-  "source": "live",
-  "data": {
-    "name": "filename.mp4",
-    "size": 168800237,
-    "thumb": "https://...",
-    "dlink": "https://...",
-    "fid": "...",
-    "uk": "...",
-    "shareid": "...",
-    "stored_at": 1609459200
-  }
-}
+# Get full data from D1 cache (raw=1 cache hit returns data)
+curl ".../?mode=resolve&surl=abc123&raw=1"
+# Response: {"source": "d1", "data": {...}}
+
+# Force fresh raw fetch (raw=1 cache miss/live returns upstream)
+curl ".../?mode=resolve&surl=abc123&raw=1&refresh=1"
+# Response: {"source": "live", "upstream": {...}}
+
+# Force fresh fetch (normal)
+curl ".../?mode=resolve&surl=abc123&refresh=1"
+# Response: {"source": "live", "data": {...}}
 ```
 
 ---
 
-### Mode: `stream`
-Returns M3U8 playlist for video playback. **Requires calling `resolve` first.**
+## Mode: `lookup` 🚀 Fastest
+
+Query D1 database directly. No upstream calls. Instant response.
+
+**Parameters:**
+- `surl` - Lookup by share ID
+- `fid` - Lookup by file ID
+
+**Examples:**
+```bash
+# Lookup by share
+curl ".../?mode=lookup&surl=abc123"
+
+# Lookup by file ID
+curl ".../?mode=lookup&fid=511133506523791"
+```
+
+**Response:**
+```json
+{
+  "source": "d1",
+  "data": {
+    "share_id": "abc123",
+    "title": "...",
+    "list": [{ "fs_id": "...", "server_filename": "...", "thumbs": {...} }]
+  }
+}
+```
+
+**Use Cases:**
+- Building dashboards showing cached files
+- Searching previously resolved shares
+- Quick file info display without API calls
+
+---
+
+## Mode: `stream`
+
+Returns M3U8 playlist for video playback. If the share metadata is not yet cached in D1, the worker will automatically resolve and cache it from upstream in the background (though calling `resolve` beforehand is recommended to reduce initial latency).
 
 **Required:**
 - `surl` - Same short URL from resolve
@@ -109,173 +154,200 @@ Returns M3U8 playlist for video playback. **Requires calling `resolve` first.**
 **Optional:**
 - `type` - Video quality (default: `M3U8_AUTO_360`)
   - `M3U8_AUTO_360` - Auto quality (recommended)
-  - `M3U8_AUTO_720`
-  - Other quality options available
+  - `M3U8_AUTO_720` - Higher quality
 
 **Example:**
 ```bash
-curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=stream&surl=abc123"
+curl ".../?mode=stream&surl=abc123"
 ```
-
-**Response:** M3U8 playlist file (text/vnd.apple.mpegurl)
 
 ---
 
-### Mode: `page`
-Fetches the TeraBox share page as HTML.
+## Mode: `segment`
 
-**Required:**
-- `surl` - Short URL
+Proxies video segments. Called automatically by M3U8 playlist.
 
-**Example:**
-```bash
-curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=page&surl=abc123"
-```
+**Security:** Only allows TeraBox domains (SSRF protected).
 
-**Response:** HTML page content
+**Allowed Domains:**
+`terabox.com`, `terabox.app`, `1024tera.com`, `1024terabox.com`, `freeterabox.com`, `teraboxcdn.com`, `dm.terabox.app`, `dm.1024tera.com`, `terasharelink.com`, `terafileshare.com`, `teraboxlink.com`, `teraboxshare.com`, `terasharefile.com`, `teraboxurl.com`
 
 ---
 
-### Mode: `api`
-Direct API call to TeraBox (advanced).
+## Mode: `health`
 
-**Required:**
-- `jsToken` - JavaScript token (extracted from page)
-- `shorturl` - Short URL
-
-**Example:**
 ```bash
-curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=api&jsToken=TOKEN123&shorturl=abc123"
-```
-
-**Response:** Raw JSON from TeraBox API
-
----
-
-### Mode: `segment`
-Proxies video segments (internal use, called automatically by M3U8 playlist).
-
-**Required:**
-- `url` - Full segment URL
-
-**Example:**
-```bash
-curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=segment&url=https://..."
+# Health check
+curl ".../?mode=health"
 ```
 
 ---
 
 ## Common Use Cases
 
-### Use Case 1: Stream Video in Browser
+### Stream Video in Browser
 
 ```bash
 # Step 1: Get metadata and cache it
-curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=abc123"
+curl ".../?mode=resolve&surl=abc123"
 
-# Step 2: Get M3U8 URL
+# Step 2: Use M3U8 URL in player
 M3U8_URL="https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=stream&surl=abc123"
 
-# Step 3: Use in video player
 # VLC: vlc "$M3U8_URL"
-# HLS.js: video.src = "$M3U8_URL"
 # mpv: mpv "$M3U8_URL"
 ```
 
-### Use Case 2: Get File Info
+### Get File Info (Fast)
 
 ```bash
-curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=abc123" \
-  | jq '.data | {name, size, thumb}'
+# Use lookup for cached data (instant)
+curl ".../?mode=lookup&surl=abc123" | jq '.data.list[0] | {name: .server_filename, size}'
 ```
 
-### Use Case 3: Refresh Cached Data
-
-If the TeraBox link was updated:
+### Refresh Stale Data
 
 ```bash
-curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=abc123&refresh=1"
+curl ".../?mode=resolve&surl=abc123&refresh=1"
 ```
 
-### Use Case 4: Download with Signature
-
-After resolving, use the `dlink` URL directly with a downloader:
+### Download with dlink
 
 ```bash
-curl -o video.mp4 "$(curl -s 'https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=abc123' | jq -r '.data.dlink')"
+DLINK=$(curl -s '.../?mode=resolve&surl=abc123' | jq -r '.data.dlink')
+curl -o video.mp4 "$DLINK"
 ```
 
 ---
 
-## Error Codes & Fixes
+## Response Sources
 
-| Code | Error | Fix |
-|------|-------|-----|
-| 400 | Missing parameter | Check required params (surl, jsToken, etc.) |
-| 403 | Failed to extract token | Share may be private or link expired |
-| 404 | Share not in cache | Call `mode=resolve` first |
-| 500 | Incomplete metadata | Try `mode=resolve&refresh=1` |
-| 502 | Bad upstream response | TeraBox API may be down |
+| Source | Meaning |
+|--------|---------|
+| `"source": "live"` | Fresh data from TeraBox |
+| `"source": "d1"` | From D1 database (permanent) |
 
 ---
 
-## Response Format
+## Error Codes
 
-All successful responses are JSON:
-
+Standard error responses follow this JSON schema:
 ```json
 {
-  "source": "live|kv",
-  "data": { ... }
+  "error": "Error message details",
+  "code": "error_code_string",
+  "details": "Optional additional debugging/network information",
+  "required": ["optional", "param", "list"]
 }
 ```
 
-Error responses:
-
-```json
-{
-  "error": "Error message",
-  "required": ["param1", "param2"]
-}
-```
+| HTTP Status | Error Code (`code`) | Description / Fix |
+|-------------|---------------------|-------------------|
+| 400 | `bad_request` | Missing or invalid parameter |
+| 401 | `unauthorized` | Missing or invalid `key` / `x-admin-key` header on admin routes |
+| 403 | `token_extract_failed` / `invalid_segment_url` | Failed to extract jsToken or SSRF segment URL blocked |
+| 404 | `not_found` | Share or file not cached in D1 |
+| 500 | `incomplete_metadata` / `db_error` / `internal_error` | Missing stream metadata or internal exceptions |
+| 502 | `upstream_error` / `upstream_non_json` / `upstream_empty` | TeraBox API is down or returned invalid data |
+| 503 | `d1_unavailable` | D1 database not bound/configured |
+| 504 | `upstream_timeout` | The upstream TeraBox requests timed out (8s limit) |
 
 ---
 
-## Tips & Tricks
+## Tips
+
+⚠️ **dlink requires cookies** — The download link won't work without valid TeraBox cookies passed in headers
 
 ✅ **Always call `resolve` first** before using `stream`
 
-✅ **Cache is automatic** — metadata is cached for ~24 hours
+✅ **Use `lookup` for fast queries** — no upstream calls
+
+✅ **Use `raw=1`** to get full file data with thumbnails
 
 ✅ **Use `refresh=1`** if data seems stale
 
-✅ **M3U8 playlists are rewritten** — segments are automatically proxied through the worker
+✅ **M3U8 segments are auto-proxied** through the worker
 
-✅ **Thumbnails available** in resolve response (`data.thumb`)
+✅ **CORS enabled** — works from browser JavaScript
 
 ---
 
-## Testing with cURL
+## Admin Endpoints
 
-```bash
-# Test resolve
-curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=abc123" | jq
+The proxy includes path-based admin endpoints to inspect database records and analytics. All requests require authentication if `ADMIN_KEY` is configured in `wrangler.toml`. Pass the key using either:
+- The `key` query parameter: `?key=YOUR_ADMIN_KEY`
+- The `x-admin-key` request header: `x-admin-key: YOUR_ADMIN_KEY`
 
-# Test stream (get M3U8)
-curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=stream&surl=abc123"
+### Endpoints:
 
-# Test missing parameter
-curl "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=api"
+#### 1. Overview
+Get overall counts of shares, files, thumbnails, and the 20 most recently updated shares.
+* **Path:** `GET /admin/overview`
+* **Response:** `{ "counts": { "shares": 10, "media_files": 42, "thumbnails": 168 }, "latestShares": [...] }`
 
-# Pretty-print JSON
-curl -s "https://tbx-proxy.shakir-ansarii075.workers.dev/?mode=resolve&surl=abc123" | jq .
-```
+#### 2. Shares List
+List and search stored shares.
+* **Path:** `GET /admin/shares`
+* **Query Params:**
+  * `q` (optional): Filter by share ID, title, or user ID (uk)
+  * `sort` (optional): Sort by `updated_at`, `server_time`, or `title` (default: `updated_at`)
+  * `order` (optional): `asc` or `desc` (default: `desc`)
+  * `page` (optional): Page number (default: `1`)
+  * `pageSize` (optional): Items per page, max 200 (default: `50`)
+* **Response:** `{ "page": 1, "pageSize": 50, "total": 12, "items": [...] }`
+
+#### 3. Share Details
+Get full detail of a share, pagination of its media files, and thumbnails.
+* **Path:** `GET /admin/shares/:share_id`
+* **Query Params:**
+  * `page` (optional): Page number of media files (default: `1`)
+  * `pageSize` (optional): Files per page (default: `50`)
+* **Response:** `{ "share": {...}, "files": [...], "thumbsByFsId": {...}, "page": 1, "pageSize": 50, "totalFiles": 10 }`
+
+#### 4. Media Files List
+List and filter files.
+* **Path:** `GET /admin/files`
+* **Query Params:**
+  * `q` (optional): Search by file name or file system ID (`fs_id`)
+  * `share_id` (optional): Filter files in a specific share
+  * `size_min` / `size_max` (optional): Filter files by size limits (in bytes)
+  * `sort` (optional): Sort by `server_mtime`, `size`, or `server_filename` (default: `server_mtime`)
+  * `order` (optional): `asc` or `desc` (default: `desc`)
+  * `page` / `pageSize` (optional)
+* **Response:** `{ "page": 1, "pageSize": 50, "total": 10, "items": [...] }`
+
+#### 5. File Details
+Get details of a specific file and its thumbnails.
+* **Path:** `GET /admin/files/:fs_id`
+* **Response:** `{ "file": {...}, "thumbs": { "url1": "...", "url2": "..." } }`
+
+#### 6. Thumbnails List
+Search thumbnails.
+* **Path:** `GET /admin/thumbnails`
+* **Query Params:**
+  * `fs_id` (optional): Filter by file system ID
+  * `type` (optional): Filter by thumbnail type (`url1`, `url2`, `url3`, `icon`)
+  * `page` / `pageSize` (optional)
+* **Response:** `{ "page": 1, "pageSize": 50, "total": 150, "items": [...] }`
+
+#### 7. Analytics: Processed Links
+Get the count of resolved shares grouped by day.
+* **Path:** `GET /admin/analytics/processed`
+* **Query Params:**
+  * `limit` (optional): Number of days of history, max 180 (default: `30`)
+* **Response:** `{ "limit": 30, "items": [{ "day": "2026-06-08", "shares": 5 }, ...] }`
+
+#### 8. Cache Record Entry Lookup
+Retrieve a resolved record for a specific short URL from D1.
+* **Path:** `GET /admin/kv/entry` (Note: queries D1 database)
+* **Query Params:**
+  * `surl` (required): TeraBox short URL
+* **Response:** `{ "surl": "...", "data": { "name": "...", "dlink": "..." } }`
 
 ---
 
 ## Need Help?
 
-- **Worker not deployed?** Run `wrangler deploy`
-- **KV not configured?** Check `wrangler.toml` has correct KV namespace
-- **Getting 500 errors?** Try with `&raw=1` to see upstream response
-- **Link expired?** Use `&refresh=1` to re-fetch from TeraBox
+- **Worker not deployed?** Run `npx wrangler deploy`
+- **D1 not configured?** Check `wrangler.toml`
+- **Getting 500 errors?** Try with `&raw=1` to see full response

@@ -18,8 +18,9 @@ The API uses Flask 3.x native async support with `aiohttp` for asynchronous requ
 ## Features
 
 - **Web API Endpoints**:
-  - `GET /api`: Unified endpoint - file listing (backward compatible) and proxy modes (resolve, page, api, stream, segment)
+  - `GET /api`: Unified endpoint - file listing (backward compatible) and proxy modes (resolve, lookup, stream, page, api, segment, health)
   - `GET /api2`: Retrieves file metadata and resolves direct download links
+  - `GET /admin/*`: Path-based admin endpoints to inspect database records and analytics (overview, shares, files, thumbnails, kv/entry)
   - `GET /help`: Provides inline documentation for the API
   - `GET /health`: Simple health check endpoint
   - `GET /`: API information and status
@@ -201,6 +202,12 @@ Auto extract jsToken + fetch share API in one call.
 curl "http://localhost:5000/api?mode=resolve&surl=abc123"
 ```
 
+**Mode: `lookup` (🚀 Fastest)**
+Query the D1 database cache directly with no upstream calls. Requires `surl` or `fid`.
+```bash
+curl "http://localhost:5000/api?mode=lookup&surl=abc123"
+```
+
 **Mode: `page`**
 Proxy raw share HTML page for debugging.
 ```bash
@@ -227,11 +234,24 @@ Proxy media segments (.ts, .m4s) - used automatically by rewritten playlists.
 curl "http://localhost:5000/api?mode=segment&url=ENCODED_URL"
 ```
 
+**Mode: `health`**
+Check the health status of the worker service.
+```bash
+curl "http://localhost:5000/api?mode=health"
+```
+
 **Notes**:
 - Cookies are forwarded from client request if provided in `Cookie` header
 - Use `mode=resolve` for most use cases
 - `stream` and `segment` modes enable HLS video playback in browsers and players
 - Legacy `/api?url=...` usage remains fully supported
+
+#### `GET /admin/*` - Admin Endpoints
+Path-based admin endpoints to inspect database records and analytics. All requests require authentication if configured in the worker. Pass the key using either `?key=YOUR_ADMIN_KEY` or `x-admin-key` header.
+- `GET /admin/overview`: Summary metrics of shares and files
+- `GET /admin/shares`: Search and list resolved shares
+- `GET /admin/files`: Search and filter media files
+- `GET /admin/kv/entry?surl=...`: Lookup raw cached D1 share record
 
 ---
 
