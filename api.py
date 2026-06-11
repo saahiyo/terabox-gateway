@@ -327,21 +327,25 @@ async def api():
         logging.info(f"API request for URL: {url}")
 
         # Check cache first
+        # Check cache first
         cached = cache.get(url, password)
         if cached is not None:
             formatted_files = await _gather_format_file_info(cached)
             response_time = format_response_time(time.time() - start_time)
-            return jsonify(
-                {
-                    "status": "success",
-                    "url": url,
-                    "files": formatted_files,
-                    "total_files": len(formatted_files),
-                    "response_time": response_time,
-                    "cached": True,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            )
+            resp_dict = {
+                "status": "success",
+                "url": url,
+                "files": formatted_files,
+                "total_files": len(formatted_files),
+                "response_time": response_time,
+                "cached": True,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "used_cookies": getattr(cached, "used_cookies", False),
+            }
+            if getattr(cached, "fallback_no_cookie", False):
+                resp_dict["fallback_no_cookie"] = True
+                resp_dict["warning"] = "Cookies were rate-limited or invalid. Resolved anonymously without cookies. Download links may be missing."
+            return jsonify(resp_dict)
 
         link_data = await fetch_download_link(url, password)
 
@@ -368,17 +372,21 @@ async def api():
             formatted_files = await _gather_format_file_info(link_data)
             response_time = format_response_time(time.time() - start_time)
 
-            return jsonify(
-                {
-                    "status": "success",
-                    # "used_cookie": cookies.get("ndus", ""), # Removed for privacy
-                    "url": url,
-                    "files": formatted_files,
-                    "total_files": len(formatted_files),
-                    "response_time": response_time,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            )
+            resp_dict = {
+                "status": "success",
+                # "used_cookie": cookies.get("ndus", ""), # Removed for privacy
+                "url": url,
+                "files": formatted_files,
+                "total_files": len(formatted_files),
+                "response_time": response_time,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "used_cookies": getattr(link_data, "used_cookies", False),
+            }
+            if getattr(link_data, "fallback_no_cookie", False):
+                resp_dict["fallback_no_cookie"] = True
+                resp_dict["warning"] = "Cookies were rate-limited or invalid. Resolved anonymously without cookies. Download links may be missing."
+
+            return jsonify(resp_dict)
         else:
             return (
                 jsonify({"status": "error", "message": "No files found", "url": url}),
