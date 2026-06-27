@@ -12,7 +12,6 @@ from flask import Flask, request, jsonify, Response, send_from_directory
 from datetime import datetime, timezone
 import logging
 import time
-import aiohttp
 
 # Import from our modules
 from config import (
@@ -28,7 +27,7 @@ from config import (
     PROXY_MODE_LOOKUP,
     PROXY_MODE_HEALTH,
 )
-from utils import is_valid_share_url
+from utils import is_valid_share_url, _proxy_request
 from terabox_client import (
     fetch_download_link,
     fetch_direct_links,
@@ -102,63 +101,7 @@ def health():
     return jsonify({"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()})
 
 
-async def _proxy_request(url: str, params: dict, cookies: dict, req_headers: dict = None) -> dict:
-    """Internal helper to make async proxy requests.
-    
-    Args:
-        url: Proxy base URL
-        params: Query parameters
-        cookies: Cookie dictionary
-        req_headers: Optional client headers to forward
-        
-    Returns:
-        dict: Response data with content, status, headers, and content_type
-    """
-    try:
-        from config import headers as default_headers
-        proxy_headers = default_headers.copy()
-        if req_headers:
-            for k, v in req_headers.items():
-                if k.lower() in ["x-admin-key", "authorization"]:
-                    proxy_headers[k] = v
 
-        async with aiohttp.ClientSession(cookies=cookies, headers=proxy_headers) as session:
-            async with session.get(url, params=params) as response:
-                content = await response.read()
-                
-                # Determine content type
-                content_type = response.headers.get("Content-Type", "application/json")
-                
-                # For non-200 responses, try to parse as JSON error
-                if response.status != 200:
-                    try:
-                        error_data = await response.json()
-                        return {
-                            "error": error_data.get("error", "Proxy request failed"),
-                            "status_code": response.status,
-                            "details": error_data
-                        }
-                    except Exception:
-                        return {
-                            "error": f"Proxy returned status {response.status}",
-                            "status_code": response.status,
-                            "details": content.decode("utf-8", errors="ignore")[:500]
-                        }
-                
-                # Return successful response
-                return {
-                    "content": content,
-                    "status": response.status,
-                    "headers": dict(response.headers),
-                    "content_type": content_type
-                }
-    
-    except Exception as e:
-        logging.error(f"Proxy request error: {e}", exc_info=True)
-        return {
-            "error": str(e),
-            "status_code": 500
-        }
 
 
 
@@ -327,7 +270,43 @@ async def api():
         password = request.args.get("pwd", "")
         logging.info(f"API request for URL: {url}")
 
-        # Check cache first
+        # Determine if direct links resolution is requested
+        is_api2 = request.path == "/api2"
+        direct = (request.args.get("direct", "0") in ("1", "true", "True")) or is_api2
+
+        if direct:
+            link_data = await fetch_direct_links(url, password)
+            if isinstance(link_data, dict) and "error" in link_data:
+                return (
+                    jsonify(
+                        {
+                            "status": "error",
+                            "url": url,
+                            "error": link_data["error"],
+                            "errno": link_data.get("errno"),
+                        }
+                    ),
+                    500,
+                )
+            if link_data:
+                formatted_files = await _normalize_api2_items(link_data)
+                response_time = format_response_time(time.time() - start_time)
+                return jsonify(
+                    {
+                        "status": "success",
+                        "url": url,
+                        "files": formatted_files,
+                        "total_files": len(formatted_files),
+                        "response_time": response_time,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+            else:
+                return (
+                    jsonify({"status": "error", "message": "No files found", "url": url}),
+                    404,
+                )
+
         # Check cache first
         cached = cache.get(url, password)
         if cached is not None:
@@ -465,80 +444,8 @@ async def admin_proxy(subpath):
 @app.route("/api2", methods=["GET"])
 @rate_limit
 async def api2():
-    """Alternative API endpoint - with direct download links."""
-    try:
-        start_time = time.time()
-        url = request.args.get("url")
-
-        if not url:
-            return (
-                jsonify(
-                    {
-                        "status": "error",
-                        "message": "Missing required parameter: url",
-                        "example": "/api2?url=https://teraboxshare.com/s/...",
-                    }
-                ),
-                400,
-            )
-        if not is_valid_share_url(url):
-            return (
-                jsonify(
-                    {
-                        "status": "error",
-                        "message": "Invalid TeraBox share URL",
-                        "example": "/api2?url=https://teraboxshare.com/s/XXXXXXXX",
-                    }
-                ),
-                400,
-            )
-
-        logging.info(f"API2 request for URL: {url}")
-
-        password = request.args.get("pwd", "")
-
-        link_data = await fetch_direct_links(url, password)
-
-        # Check if error occurred
-        if isinstance(link_data, dict) and "error" in link_data:
-            return (
-                jsonify(
-                    {
-                        "status": "error",
-                        "url": url,
-                        "error": link_data["error"],
-                        "errno": link_data.get("errno"),
-                    }
-                ),
-                500,
-            )
-
-        if link_data:
-            # Normalize file objects to match /api shape and include direct_link when available
-            formatted_files = await _normalize_api2_items(link_data)
-            response_time = format_response_time(time.time() - start_time)
-            return jsonify(
-                {
-                    "status": "success",
-                    "url": url,
-                    "files": formatted_files,
-                    "total_files": len(formatted_files),
-                    "response_time": response_time,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            )
-        else:
-            return (
-                jsonify({"status": "error", "message": "No files found", "url": url}),
-                404,
-            )
-
-    except Exception as e:
-        logging.error(f"API2 error: {e}", exc_info=True)
-        return (
-            jsonify({"status": "error", "message": str(e), "url": request.args.get("url", "")} ),
-            500,
-        )
+    """Deprecated: Use /api?url=...&direct=true instead. Resolves metadata and direct download links."""
+    return await api()
 
 
 @app.route("/swagger.json", methods=["GET"])

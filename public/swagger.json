@@ -57,8 +57,9 @@
     },
     "/api2": {
       "get": {
-        "summary": "Get Direct Download Links",
-        "description": "Retrieves file metadata and resolves direct download links by following redirects.",
+        "summary": "Get Direct Download Links (Deprecated)",
+        "description": "⚠️ Deprecated. Use `/api?url=...&direct=true` instead. Kept for backward compatibility.",
+        "deprecated": true,
         "parameters": [
           {
             "name": "url",
@@ -101,22 +102,32 @@
     },
     "/api": {
       "get": {
-        "summary": "Unified Endpoint (File Listing / Proxy Modes)",
-        "description": "Depending on the parameters, lists files under a share URL (legacy mode) or interacts directly with the Cloudflare Worker proxy in different operational modes.",
+        "summary": "Unified Endpoint (File Listing / Proxy Modes / Direct Links)",
+        "description": "Single endpoint for all use cases: file metadata listing, direct download link resolution (use `direct=true`), and Cloudflare proxy modes.",
         "parameters": [
           {
             "name": "url",
             "in": "query",
-            "description": "TeraBox share URL (legacy mode)",
+            "description": "TeraBox share URL",
             "required": false,
             "schema": {
               "type": "string"
             }
           },
           {
+            "name": "direct",
+            "in": "query",
+            "description": "Set to `true` or `1` to resolve direct download links (replaces /api2)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["true", "1", "false", "0"]
+            }
+          },
+          {
             "name": "pwd",
             "in": "query",
-            "description": "Password for protected links (legacy mode)",
+            "description": "Password for protected links",
             "required": false,
             "schema": {
               "type": "string"

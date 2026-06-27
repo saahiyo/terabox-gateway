@@ -7,6 +7,7 @@ for string manipulation, formatting, and validation.
 import logging
 from typing import Optional, Union
 from urllib.parse import parse_qs, urlparse
+import aiohttp
 
 from config import ALLOWED_HOSTS
 
@@ -101,3 +102,63 @@ def get_formatted_size(size_bytes: Union[int, str]) -> str:
     except Exception as e:
         logging.error(f"Error formatting size: {e}")
         return "Unknown"
+
+
+async def _proxy_request(url: str, params: dict, cookies: dict, req_headers: dict = None) -> dict:
+    """Internal helper to make async proxy requests.
+    
+    Args:
+        url: Proxy base URL
+        params: Query parameters
+        cookies: Cookie dictionary
+        req_headers: Optional client headers to forward
+        
+    Returns:
+        dict: Response data with content, status, headers, and content_type
+    """
+    try:
+        from config import headers as default_headers
+        proxy_headers = default_headers.copy()
+        if req_headers:
+            for k, v in req_headers.items():
+                if k.lower() in ["x-admin-key", "authorization"]:
+                    proxy_headers[k] = v
+
+        async with aiohttp.ClientSession(cookies=cookies, headers=proxy_headers) as session:
+            async with session.get(url, params=params) as response:
+                content = await response.read()
+                
+                # Determine content type
+                content_type = response.headers.get("Content-Type", "application/json")
+                
+                # For non-200 responses, try to parse as JSON error
+                if response.status != 200:
+                    try:
+                        error_data = await response.json()
+                        return {
+                            "error": error_data.get("error", "Proxy request failed"),
+                            "status_code": response.status,
+                            "details": error_data
+                        }
+                    except Exception:
+                        return {
+                            "error": f"Proxy returned status {response.status}",
+                            "status_code": response.status,
+                            "details": content.decode("utf-8", errors="ignore")[:500]
+                        }
+                
+                # Return successful response
+                return {
+                    "content": content,
+                    "status": response.status,
+                    "headers": dict(response.headers),
+                    "content_type": content_type
+                }
+    
+    except Exception as e:
+        logging.error(f"Proxy request error: {e}", exc_info=True)
+        return {
+            "error": str(e),
+            "status_code": 500
+        }
+

@@ -27,8 +27,8 @@ The API uses Flask 3.x native async support with `aiohttp` for asynchronous requ
 - **Web API Endpoints**:
   - `GET /docs`: Interactive Swagger UI documentation playground (API playground)
   - `GET /swagger.json`: OpenAPI 3.0.0 schema specification
-  - `GET /api`: Unified endpoint - file listing (backward compatible) and proxy modes (resolve, lookup, stream, page, api, segment, health)
-  - `GET /api2`: Retrieves file metadata and resolves direct download links
+  - `GET /api`: Unified endpoint - file listing, direct links (`direct=true`), and proxy modes (resolve, lookup, stream, page, api, segment, health)
+  - `GET /api2`: ⚠️ Deprecated. Alias for `/api?direct=true`. Kept for backward compatibility.
   - `GET /admin/*`: Path-based admin endpoints to inspect database records and analytics (overview, shares, files, thumbnails, kv/entry)
   - `GET /health`: Simple health check endpoint
   - `GET /`: API information and status
@@ -181,33 +181,34 @@ Exposes the OpenAPI 3.0.0 JSON schema defining the entire API.
 curl http://localhost:5000/swagger.json
 ```
 
-
-#### `GET /api2` - Get Direct Download Links
-Retrieves file metadata and resolves direct download links by following redirects.
-
-**Parameters**:
-- `url` (required): TeraBox share URL
-- `pwd` (optional): Password for protected links
+> **⚠️ Deprecated**: `/api2` is kept for backward compatibility. Use `/api?url=...&direct=true` instead.
 
 **Example**:
 ```bash
 curl "http://localhost:5000/api2?url=https://teraboxshare.com/s/XXXXXXXX"
+# Equivalent to:
+curl "http://localhost:5000/api?url=https://teraboxshare.com/s/XXXXXXXX&direct=true"
 ```
 
-**Response**: Similar to `/api` but includes `direct_link` field for each file.
+#### `GET /api` - Unified Endpoint (File Listing + Direct Links + Proxy Modes)
 
-#### `GET /api` - Unified Endpoint (File Listing + Proxy Modes)
+The `/api` endpoint handles **all use cases** in one place:
 
-The `/api` endpoint now supports **two usage patterns**:
-
-**Pattern 1: File Listing (Backward Compatible)**
-Retrieves file metadata for a TeraBox share link - maintains full backward compatibility.
+**Pattern 1: File Listing (Metadata Only)**
+Retrieves file metadata for a TeraBox share link.
 
 ```bash
 curl "http://localhost:5000/api?url=https://1024terabox.com/s/1LNr3tyl5pI5KUM8BecGtyQ"
 ```
 
-**Pattern 2: Proxy Modes**
+**Pattern 2: Direct Download Links** *(New — replaces `/api2`)*
+Fetch metadata **and** resolved direct download links in one call.
+
+```bash
+curl "http://localhost:5000/api?url=https://teraboxshare.com/s/XXXXXXXX&direct=true"
+```
+
+**Pattern 3: Proxy Modes**
 Direct access to the Cloudflare Worker proxy with multiple modes for different use cases.
 
 **Mode: `resolve` (Recommended)**
@@ -287,7 +288,7 @@ Both `http://` and `https://` protocols are supported.
 
 ## Integration Examples
 
-You can easily query the gateway API using your preferred programming language. Here are examples of retrieving direct download links for a TeraBox share URL using the `/api2` endpoint:
+You can easily query the gateway API using your preferred programming language. Here are examples of retrieving direct download links for a TeraBox share URL using `/api?direct=true`:
 
 ### 🐍 Python (using `requests`)
 
@@ -296,8 +297,8 @@ import requests
 
 def get_direct_links(gateway_url, share_url):
     response = requests.get(
-        f"{gateway_url}/api2",
-        params={"url": share_url}
+        f"{gateway_url}/api",
+        params={"url": share_url, "direct": "true"}
     )
     if response.status_code == 200:
         data = response.json()
@@ -320,7 +321,7 @@ def get_direct_links(gateway_url, share_url):
 ```javascript
 async function getDirectLinks(gatewayUrl, shareUrl) {
     try {
-        const response = await fetch(`${gatewayUrl}/api2?url=${encodeURIComponent(shareUrl)}`);
+        const response = await fetch(`${gatewayUrl}/api?url=${encodeURIComponent(shareUrl)}&direct=true`);
         const data = await response.json();
         
         if (response.ok && data.status === 'success') {
@@ -365,7 +366,7 @@ type APIResponse struct {
 }
 
 func getDirectLinks(gatewayURL, shareURL string) {
-	resp, err := http.Get(fmt.Sprintf("%s/api2?url=%s", gatewayURL, url.QueryEscape(shareURL)))
+	resp, err := http.Get(fmt.Sprintf("%s/api?url=%s&direct=true", gatewayURL, url.QueryEscape(shareURL)))
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
