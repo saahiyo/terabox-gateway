@@ -1,0 +1,203 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "TeraBox Gateway API",
+    "description": "Fast Python gateway for extracting metadata, thumbnails, and direct download links from Terabox share URLs. Built with Flask 3.x async and aiohttp.",
+    "version": "2.0.0",
+    "contact": {
+      "name": "@Saahiyo",
+      "url": "https://github.com/saahiyo/terabox-gateway"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current Server (Relative)"
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "API Information",
+        "description": "Returns status, version, and endpoints list.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "name": "TeraBox API",
+                  "version": "2.0",
+                  "status": "operational"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Checks gateway status.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "example": {
+                  "status": "healthy",
+                  "timestamp": "2026-06-28T01:23:54Z"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api2": {
+      "get": {
+        "summary": "Get Direct Download Links",
+        "description": "Retrieves file metadata and resolves direct download links by following redirects.",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "description": "TeraBox share URL (e.g. https://teraboxshare.com/s/XXXXXXXX)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pwd",
+            "in": "query",
+            "description": "Password for protected share links",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resolved files successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing parameters or invalid URL"
+          },
+          "500": {
+            "description": "Server or proxy connection error"
+          }
+        }
+      }
+    },
+    "/api": {
+      "get": {
+        "summary": "Unified Endpoint (File Listing / Proxy Modes)",
+        "description": "Depending on the parameters, lists files under a share URL (legacy mode) or interacts directly with the Cloudflare Worker proxy in different operational modes.",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "description": "TeraBox share URL (legacy mode)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pwd",
+            "in": "query",
+            "description": "Password for protected links (legacy mode)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "description": "Proxy mode: resolve, lookup, page, api, stream, segment, health, thumbnail",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["resolve", "lookup", "page", "api", "stream", "segment", "health", "thumbnail"]
+            }
+          },
+          {
+            "name": "surl",
+            "in": "query",
+            "description": "Short URL key (required for resolve, lookup, page, stream modes)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fid",
+            "in": "query",
+            "description": "File ID (lookup or thumbnail modes)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jsToken",
+            "in": "query",
+            "description": "jsToken extracted from share page (required for api mode)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "shorturl",
+            "in": "query",
+            "description": "Short URL key (required for api mode)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "Stream quality type (e.g. M3U8_AUTO_720, default: M3U8_AUTO_360) for stream mode",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful request"
+          },
+          "400": {
+            "description": "Invalid mode or missing parameters"
+          }
+        }
+      }
+    },
+    "/help": {
+      "get": {
+        "summary": "API Help/Documentation (JSON)",
+        "description": "Returns raw JSON documentation for all features and usage patterns.",
+        "responses": {
+          "200": {
+            "description": "Success"
+          }
+        }
+      }
+    }
+  }
+}
