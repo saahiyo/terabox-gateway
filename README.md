@@ -27,8 +27,7 @@ The API uses Flask 3.x native async support with `aiohttp` for asynchronous requ
 - **Web API Endpoints**:
   - `GET /docs`: Interactive Swagger UI documentation playground (API playground)
   - `GET /swagger.json`: OpenAPI 3.0.0 schema specification
-  - `GET /api`: Unified endpoint - file listing, direct links (`direct=true`), and proxy modes (resolve, lookup, stream, page, api, segment, health)
-  - `GET /api2`: ⚠️ Deprecated. Alias for `/api?direct=true`. Kept for backward compatibility.
+  - `GET /api`: Unified endpoint - file listing, direct links (`?direct=true`), and proxy modes (resolve, lookup, stream, page, api, segment, health)
   - `GET /admin/*`: Path-based admin endpoints to inspect database records and analytics (overview, shares, files, thumbnails, kv/entry)
   - `GET /health`: Simple health check endpoint
   - `GET /`: API information and status
@@ -181,14 +180,6 @@ Exposes the OpenAPI 3.0.0 JSON schema defining the entire API.
 curl http://localhost:5000/swagger.json
 ```
 
-> **⚠️ Deprecated**: `/api2` is kept for backward compatibility. Use `/api?url=...&direct=true` instead.
-
-**Example**:
-```bash
-curl "http://localhost:5000/api2?url=https://teraboxshare.com/s/XXXXXXXX"
-# Equivalent to:
-curl "http://localhost:5000/api?url=https://teraboxshare.com/s/XXXXXXXX&direct=true"
-```
 
 #### `GET /api` - Unified Endpoint (File Listing + Direct Links + Proxy Modes)
 
@@ -201,7 +192,7 @@ Retrieves file metadata for a TeraBox share link.
 curl "http://localhost:5000/api?url=https://1024terabox.com/s/1LNr3tyl5pI5KUM8BecGtyQ"
 ```
 
-**Pattern 2: Direct Download Links** *(New — replaces `/api2`)*
+**Pattern 2: Direct Download Links**
 Fetch metadata **and** resolved direct download links in one call.
 
 ```bash

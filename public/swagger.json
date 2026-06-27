@@ -55,51 +55,6 @@
         }
       }
     },
-    "/api2": {
-      "get": {
-        "summary": "Get Direct Download Links (Deprecated)",
-        "description": "⚠️ Deprecated. Use `/api?url=...&direct=true` instead. Kept for backward compatibility.",
-        "deprecated": true,
-        "parameters": [
-          {
-            "name": "url",
-            "in": "query",
-            "description": "TeraBox share URL (e.g. https://teraboxshare.com/s/XXXXXXXX)",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "pwd",
-            "in": "query",
-            "description": "Password for protected share links",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Resolved files successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Missing parameters or invalid URL"
-          },
-          "500": {
-            "description": "Server or proxy connection error"
-          }
-        }
-      }
-    },
     "/api": {
       "get": {
         "summary": "Unified Endpoint (File Listing / Proxy Modes / Direct Links)",

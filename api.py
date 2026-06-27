@@ -118,8 +118,7 @@ def index():
                 "/": "API information",
                 "/docs": "Interactive Swagger UI documentation (API playground)",
                 "/swagger.json": "OpenAPI 3.0.0 specification (JSON)",
-                "/api": "Unified endpoint - file listing and proxy modes (resolve, page, api, stream, segment)",
-                "/api2": "Fetch files with direct download links",
+                "/api": "Unified endpoint - file listing, direct links (?direct=true), and proxy modes",
                 "/health": "Health check",
             },
             "contact": "@Saahiyo",
@@ -271,8 +270,7 @@ async def api():
         logging.info(f"API request for URL: {url}")
 
         # Determine if direct links resolution is requested
-        is_api2 = request.path == "/api2"
-        direct = (request.args.get("direct", "0") in ("1", "true", "True")) or is_api2
+        direct = request.args.get("direct", "0") in ("1", "true", "True")
 
         if direct:
             link_data = await fetch_direct_links(url, password)
@@ -440,12 +438,6 @@ async def admin_proxy(subpath):
         logging.error(f"Admin proxy error: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
-
-@app.route("/api2", methods=["GET"])
-@rate_limit
-async def api2():
-    """Deprecated: Use /api?url=...&direct=true instead. Resolves metadata and direct download links."""
-    return await api()
 
 
 @app.route("/swagger.json", methods=["GET"])
