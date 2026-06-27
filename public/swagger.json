@@ -58,7 +58,7 @@
     "/api": {
       "get": {
         "summary": "Unified Endpoint (File Listing / Proxy Modes / Direct Links)",
-        "description": "Single endpoint for all use cases: file metadata listing with direct download links, and Cloudflare proxy modes.",
+        "description": "Single endpoint for all use cases: file metadata listing (fast short links by default) and optional direct download link resolution.",
         "parameters": [
           {
             "name": "url",
@@ -67,6 +67,16 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "resolve",
+            "in": "query",
+            "description": "Set to `true` to follow redirects and resolve final long direct download links (slower)",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
             }
           },
           {

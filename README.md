@@ -27,7 +27,7 @@ The API uses Flask 3.x native async support with `aiohttp` for asynchronous requ
 - **Web API Endpoints**:
   - `GET /docs`: Interactive Swagger UI documentation playground (API playground)
   - `GET /swagger.json`: OpenAPI 3.0.0 schema specification
-  - `GET /api`: Unified endpoint - file listing with direct download links, and proxy modes (resolve, lookup, stream, page, api, segment, health)
+  - `GET /api`: Unified endpoint - file listing with short links (resolve with `resolve=true`), and proxy modes (resolve, lookup, stream, page, api, segment, health)
   - `GET /admin/*`: Path-based admin endpoints to inspect database records and analytics (overview, shares, files, thumbnails, kv/entry)
   - `GET /health`: Simple health check endpoint
   - `GET /`: API information and status
@@ -185,14 +185,21 @@ curl http://localhost:5000/swagger.json
 
 The `/api` endpoint handles **all use cases** in one place:
 
-**Pattern 1: File Listing with Direct Download Links**
-Retrieves file metadata and resolves direct download links for a TeraBox share link.
+**Pattern 1: File Listing with Short Download Links (Fast - Default)**
+Retrieves file metadata and the shorter proxy-redirect links. This is the default mode and resolves in milliseconds since no slow redirect checks are run.
 
 ```bash
 curl "http://localhost:5000/api?url=https://1024terabox.com/s/1LNr3tyl5pI5KUM8BecGtyQ"
 ```
 
-**Pattern 2: Proxy Modes**
+**Pattern 2: File Listing with Fully-Resolved Direct Download Links**
+Retrieves file metadata and follows redirects to get the long target PCS direct download URLs.
+
+```bash
+curl "http://localhost:5000/api?url=https://1024terabox.com/s/1LNr3tyl5pI5KUM8BecGtyQ&resolve=true"
+```
+
+**Pattern 3: Proxy Modes**
 Direct access to the Cloudflare Worker proxy with multiple modes for different use cases.
 
 **Mode: `resolve` (Recommended)**

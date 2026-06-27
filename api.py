@@ -29,6 +29,7 @@ from config import (
 )
 from utils import is_valid_share_url, _proxy_request
 from terabox_client import (
+    fetch_download_link,
     fetch_direct_links,
     _normalize_api2_items,
 )
@@ -267,10 +268,32 @@ async def api():
         password = request.args.get("pwd", "")
         logging.info(f"API request for URL: {url}")
 
+        resolve = request.args.get("resolve", "0") in ("1", "true", "True")
+
         # Check cache first
         cached = cache.get(url, password)
         if cached is not None:
-            formatted_files = await _normalize_api2_items(cached)
+            if resolve:
+                resolved_data = await fetch_direct_links(url, password, files=cached)
+                if isinstance(resolved_data, dict) and "error" in resolved_data:
+                    status_code = 400 if resolved_data.get("requires_password") else 500
+                    return (
+                        jsonify(
+                            {
+                                "status": "error",
+                                "url": url,
+                                "error": resolved_data["error"],
+                                "errno": resolved_data.get("errno"),
+                                "message": resolved_data.get("message", ""),
+                                "requires_password": resolved_data.get("requires_password", False),
+                            }
+                        ),
+                        status_code,
+                    )
+                formatted_files = await _normalize_api2_items(resolved_data)
+            else:
+                formatted_files = await _normalize_api2_items(cached)
+            
             response_time = format_response_time(time.time() - start_time)
             resp_dict = {
                 "status": "success",
@@ -287,7 +310,7 @@ async def api():
                 resp_dict["warning"] = "Cookies were rate-limited or invalid. Resolved anonymously without cookies. Download links may be missing."
             return jsonify(resp_dict)
 
-        link_data = await fetch_direct_links(url, password)
+        link_data = await fetch_download_link(url, password)
 
         # Check if error occurred
         if isinstance(link_data, dict) and "error" in link_data:
@@ -309,7 +332,26 @@ async def api():
         # Format file information
         if link_data:
             cache.put(url, link_data, password)
-            formatted_files = await _normalize_api2_items(link_data)
+            if resolve:
+                resolved_data = await fetch_direct_links(url, password, files=link_data)
+                if isinstance(resolved_data, dict) and "error" in resolved_data:
+                    status_code = 400 if resolved_data.get("requires_password") else 500
+                    return (
+                        jsonify(
+                            {
+                                "status": "error",
+                                "url": url,
+                                "error": resolved_data["error"],
+                                "errno": resolved_data.get("errno"),
+                                "message": resolved_data.get("message", ""),
+                                "requires_password": resolved_data.get("requires_password", False),
+                            }
+                        ),
+                        status_code,
+                    )
+                formatted_files = await _normalize_api2_items(resolved_data)
+            else:
+                formatted_files = await _normalize_api2_items(link_data)
             response_time = format_response_time(time.time() - start_time)
 
             resp_dict = {

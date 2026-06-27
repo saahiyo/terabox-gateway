@@ -270,20 +270,22 @@ async def format_file_info(file_data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def fetch_direct_links(
-    url: str, password: str = ""
+    url: str, password: str = "", files: Optional[List[Dict[str, Any]]] = None
 ) -> Union[List[Dict[str, Any]], Dict[str, Any]]:
     """Fetch files with direct download links (alternative method).
     
     Args:
         url: TeraBox share URL
         password: Optional password for protected links
+        files: Optional list of files already fetched from cache or API
         
     Returns:
         Union[List[Dict[str, Any]], Dict[str, Any]]: List of files with direct links or error dict
     """
 
     try:
-        files = await fetch_download_link(url, password)
+        if files is None:
+            files = await fetch_download_link(url, password)
 
         if isinstance(files, dict) and "error" in files:
             return files
