@@ -12,6 +12,7 @@ Fast Python gateway for extracting metadata, thumbnails and direct download link
 
 
 This project provides:
+- **Interactive Swagger Playground** at `/docs` for testing endpoints directly in the browser
 - **Web API** with endpoints for listing files and retrieving direct links
 - **Unified Cloudflare Worker Proxy** for optimized TeraBox API access
 - **Vercel-ready deployment** configuration
@@ -24,6 +25,8 @@ The API uses Flask 3.x native async support with `aiohttp` for asynchronous requ
 ## Features
 
 - **Web API Endpoints**:
+  - `GET /docs`: Interactive Swagger UI documentation playground (API playground)
+  - `GET /swagger.json`: OpenAPI 3.0.0 schema specification
   - `GET /api`: Unified endpoint - file listing (backward compatible) and proxy modes (resolve, lookup, stream, page, api, segment, health)
   - `GET /api2`: Retrieves file metadata and resolves direct download links
   - `GET /admin/*`: Path-based admin endpoints to inspect database records and analytics (overview, shares, files, thumbnails, kv/entry)
@@ -171,6 +174,18 @@ Provides detailed inline documentation and usage examples.
 
 ```bash
 curl http://localhost:5000/help
+```
+
+#### `GET /docs` - Interactive Swagger UI Playground
+An interactive developer playground to browse endpoints and execute requests directly from the browser.
+
+Access in browser at: `http://localhost:5000/docs`
+
+#### `GET /swagger.json` - OpenAPI Specification
+Exposes the OpenAPI 3.0.0 JSON schema defining the entire API.
+
+```bash
+curl http://localhost:5000/swagger.json
 ```
 
 

@@ -173,6 +173,8 @@ def index():
             "status": "operational",
             "endpoints": {
                 "/": "API information",
+                "/docs": "Interactive Swagger UI documentation (API playground)",
+                "/swagger.json": "OpenAPI 3.0.0 specification (JSON)",
                 "/api": "Unified endpoint - file listing and proxy modes (resolve, page, api, stream, segment)",
                 "/api2": "Fetch files with direct download links",
                 "/health": "Health check",
@@ -538,6 +540,260 @@ async def api2():
             jsonify({"status": "error", "message": str(e), "url": request.args.get("url", "")} ),
             500,
         )
+
+
+@app.route("/swagger.json", methods=["GET"])
+def swagger_spec():
+    """Serve the OpenAPI 3.0.0 JSON specification."""
+    spec = {
+        "openapi": "3.0.0",
+        "info": {
+            "title": "TeraBox Gateway API",
+            "description": "Fast Python gateway for extracting metadata, thumbnails, and direct download links from Terabox share URLs. Built with Flask 3.x async and aiohttp.",
+            "version": "2.0.0",
+            "contact": {
+                "name": "@Saahiyo",
+                "url": "https://github.com/saahiyo/terabox-gateway"
+            }
+        },
+        "servers": [
+            {
+                "url": "/",
+                "description": "Current Server (Relative)"
+            }
+        ],
+        "paths": {
+            "/": {
+                "get": {
+                    "summary": "API Information",
+                    "description": "Returns status, version, and endpoints list.",
+                    "responses": {
+                        "200": {
+                            "description": "Success",
+                            "content": {
+                                "application/json": {
+                                    "example": {
+                                        "name": "TeraBox API",
+                                        "version": "2.0",
+                                        "status": "operational"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/health": {
+                "get": {
+                    "summary": "Health Check",
+                    "description": "Checks gateway status.",
+                    "responses": {
+                        "200": {
+                            "description": "Success",
+                            "content": {
+                                "application/json": {
+                                    "example": {
+                                        "status": "healthy",
+                                        "timestamp": "2026-06-28T01:23:54Z"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api2": {
+                "get": {
+                    "summary": "Get Direct Download Links",
+                    "description": "Retrieves file metadata and resolves direct download links by following redirects.",
+                    "parameters": [
+                        {
+                            "name": "url",
+                            "in": "query",
+                            "description": "TeraBox share URL (e.g. https://teraboxshare.com/s/XXXXXXXX)",
+                            "required": True,
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "pwd",
+                            "in": "query",
+                            "description": "Password for protected share links",
+                            "required": False,
+                            "schema": {
+                                "type": "string"
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Resolved files successfully",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Missing parameters or invalid URL"
+                        },
+                        "500": {
+                            "description": "Server or proxy connection error"
+                        }
+                    }
+                }
+            },
+            "/api": {
+                "get": {
+                    "summary": "Unified Endpoint (File Listing / Proxy Modes)",
+                    "description": "Depending on the parameters, lists files under a share URL (legacy mode) or interacts directly with the Cloudflare Worker proxy in different operational modes.",
+                    "parameters": [
+                        {
+                            "name": "url",
+                            "in": "query",
+                            "description": "TeraBox share URL (legacy mode)",
+                            "required": False,
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "pwd",
+                            "in": "query",
+                            "description": "Password for protected links (legacy mode)",
+                            "required": False,
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "mode",
+                            "in": "query",
+                            "description": "Proxy mode: resolve, lookup, page, api, stream, segment, health, thumbnail",
+                            "required": False,
+                            "schema": {
+                                "type": "string",
+                                "enum": ["resolve", "lookup", "page", "api", "stream", "segment", "health", "thumbnail"]
+                            }
+                        },
+                        {
+                            "name": "surl",
+                            "in": "query",
+                            "description": "Short URL key (required for resolve, lookup, page, stream modes)",
+                            "required": False,
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "fid",
+                            "in": "query",
+                            "description": "File ID (lookup or thumbnail modes)",
+                            "required": False,
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "jsToken",
+                            "in": "query",
+                            "description": "jsToken extracted from share page (required for api mode)",
+                            "required": False,
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "shorturl",
+                            "in": "query",
+                            "description": "Short URL key (required for api mode)",
+                            "required": False,
+                            "schema": {
+                                "type": "string"
+                            }
+                        },
+                        {
+                            "name": "type",
+                            "in": "query",
+                            "description": "Stream quality type (e.g. M3U8_AUTO_720, default: M3U8_AUTO_360) for stream mode",
+                            "required": False,
+                            "schema": {
+                                "type": "string"
+                            }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Successful request"
+                        },
+                        "400": {
+                            "description": "Invalid mode or missing parameters"
+                        }
+                    }
+                }
+            },
+            "/help": {
+                "get": {
+                    "summary": "API Help/Documentation (JSON)",
+                    "description": "Returns raw JSON documentation for all features and usage patterns.",
+                    "responses": {
+                        "200": {
+                            "description": "Success"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return jsonify(spec)
+
+
+@app.route("/docs", methods=["GET"])
+def swagger_ui():
+    """Serve the Swagger UI documentation playground."""
+    return """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>TeraBox Gateway API - Swagger UI</title>
+      <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+      <link rel="icon" type="image/png" href="https://unpkg.com/swagger-ui-dist@5/favicon-32x32.png" sizes="32x32" />
+      <style>
+        html { box-sizing: border-box; overflow: -margin-y; }
+        *, *:before, *:after { box-sizing: inherit; }
+        body { margin: 0; background: #fafafa; }
+        .swagger-ui .topbar { display: none; }
+      </style>
+    </head>
+    <body>
+      <div id="swagger-ui"></div>
+      <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js" charset="UTF-8"></script>
+      <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js" charset="UTF-8"></script>
+      <script>
+        window.onload = () => {
+          window.ui = SwaggerUIBundle({
+            url: '/swagger.json',
+            dom_id: '#swagger-ui',
+            presets: [
+              SwaggerUIBundle.presets.apis,
+              SwaggerUIBundle.SwaggerUIStandalonePreset
+            ],
+            layout: "BaseLayout",
+            deepLinking: true,
+            showExtensions: true,
+            showCommonExtensions: true
+          });
+        };
+      </script>
+    </body>
+    </html>
+    """
+
 
 
 @app.route("/help", methods=["GET"])
