@@ -61,7 +61,7 @@ def create_app() -> Flask:
     while allowing local development with `python api.py`.
     """
 
-    app = Flask(__name__, static_folder="public", static_url_path="/public")
+    app = Flask(__name__, static_folder="swagger", static_url_path="/swagger")
     return app
 
 
@@ -448,7 +448,7 @@ def swagger_spec():
     """Serve the OpenAPI 3.0.0 JSON specification."""
     import os
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    return send_from_directory(os.path.join(base_dir, "public"), "swagger.json")
+    return send_from_directory(os.path.join(base_dir, "swagger"), "swagger.json")
 
 
 
