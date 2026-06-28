@@ -58,29 +58,38 @@ The API uses Flask 3.x native async support with `aiohttp` for asynchronous requ
 
 ```
 terabox-gateway/
-├── api.py                # Main Flask application and API routes
-├── config.py             # Configuration and constants (proxy URLs, headers)
-├── terabox_client.py     # TeraBox API client with unified proxy integration
-├── utils.py              # Utility functions (validation, formatting)
-├── rate_limiter.py       # Per-IP sliding-window rate limiter
-├── cache.py              # In-memory LRU cache with TTL expiration
-├── main.py               # Entry point for running Flask locally
-├── .env                  # Environment variables (not tracked in git)
-├── .env.example          # Example environment configuration
-├── requirements.txt      # Python dependencies
-├── vercel.json           # Vercel deployment configuration
-├── tboxproxy_usage.md    # Unified proxy API documentation
-├── .gitignore            # Git ignore file
-├── LICENSE               # MIT License
-├── README.md             # This file
-└── endpoints/            # Reserved for future route modularization
+├── .github/
+│   └── workflows/
+│       └── publish.yml       # GitHub Actions workflow for PyPI publishing
+├── src/
+│   └── terabox_gateway/
+│       ├── __init__.py        # Package initialization
+│       ├── api.py             # Main Flask application and API routes
+│       ├── config.py          # Configuration and constants (proxy URLs, headers)
+│       ├── terabox_client.py  # TeraBox API client with unified proxy integration
+│       ├── utils.py           # Utility functions (validation, formatting)
+│       ├── rate_limiter.py    # Per-IP sliding-window rate limiter
+│       ├── cache.py           # In-memory LRU cache with TTL expiration
+│       ├── main.py            # Package entrypoint for CLI command
+│       └── swagger/
+│           └── swagger.json   # Swagger OpenAPI JSON specification
+├── .env                       # Environment variables (not tracked in git)
+├── .env.example               # Example environment configuration
+├── pyproject.toml             # PyPI package build configuration
+├── requirements.txt           # Python dependencies
+├── vercel.json                # Vercel deployment configuration
+├── tboxproxy_usage.md         # Unified proxy API documentation
+├── main.py                    # Root entry point for running Flask locally or on Vercel
+├── .gitignore                 # Git ignore file
+├── LICENSE                    # MIT License
+└── README.md                  # This file
 ```
 
 ---
 
 ## Requirements
 
-- **Python 3.10+**
+- **Python 3.8+**
 - **Dependencies**:
   - `Flask[async]>=3.1,<4`
   - `Werkzeug>=3.1,<4`
@@ -88,8 +97,15 @@ terabox-gateway/
 
 ### Installation
 
-Install the required packages using pip:
+You can install `terabox-gateway` in two ways:
 
+#### Option 1: Install from PyPI (Recommended)
+```bash
+pip install terabox-gateway
+```
+
+#### Option 2: Local Installation (For Development)
+Clone this repository and install the dependencies locally:
 ```bash
 pip install -r requirements.txt
 ```
@@ -122,11 +138,20 @@ The API automatically detects the format and handles it accordingly.
 
 ### 2. Run the API Locally
 
-Execute the `main.py` script:
+Depending on how you installed the package:
 
+**If installed from PyPI:**
+Simply run the CLI command:
+```bash
+terabox-gateway
+```
+
+**If running from source:**
+Run the root `main.py` entrypoint:
 ```bash
 python main.py
 ```
+
 
 The server will start at:
 - `http://localhost:5000`
