@@ -271,7 +271,8 @@ async def api():
         resolve = request.args.get("resolve", "0") in ("1", "true", "True")
 
         # Check cache first
-        cached = cache.get(url, password)
+        refresh = request.args.get("refresh", "").lower() in ("1", "true")
+        cached = None if refresh else cache.get(url, password)
         if cached is not None:
             if resolve:
                 resolved_data = await fetch_direct_links(url, password, files=cached)

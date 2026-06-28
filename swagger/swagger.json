@@ -89,6 +89,16 @@
             }
           },
           {
+            "name": "refresh",
+            "in": "query",
+            "description": "Set to `true` or `1` to bypass all caches and force a fresh fetch from TeraBox",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
             "name": "mode",
             "in": "query",
             "description": "Proxy mode: resolve, lookup, page, api, stream, segment, health, thumbnail",
