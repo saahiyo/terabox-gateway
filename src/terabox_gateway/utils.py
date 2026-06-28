@@ -9,7 +9,7 @@ from typing import Optional, Union
 from urllib.parse import parse_qs, urlparse
 import aiohttp
 
-from config import ALLOWED_HOSTS
+from .config import ALLOWED_HOSTS
 
 
 def is_valid_share_url(u: str) -> bool:

@@ -14,7 +14,7 @@ import logging
 import time
 
 # Import from our modules
-from config import (
+from .config import (
     headers,
     load_cookies,
     PROXY_BASE_URL,
@@ -27,14 +27,14 @@ from config import (
     PROXY_MODE_LOOKUP,
     PROXY_MODE_HEALTH,
 )
-from utils import is_valid_share_url, _proxy_request
-from terabox_client import (
+from .utils import is_valid_share_url, _proxy_request
+from .terabox_client import (
     fetch_download_link,
     fetch_direct_links,
     _normalize_api2_items,
 )
-from rate_limiter import rate_limit
-import cache
+from .rate_limiter import rate_limit
+from . import cache
 
 
 
@@ -80,7 +80,7 @@ def add_cors_headers(resp: Response) -> Response:
 
 # Optional blueprint registration: if endpoints.bp exists, register it.
 try:
-    from endpoints import bp as endpoints_bp  # type: ignore
+    from .endpoints import bp as endpoints_bp  # type: ignore
 
     app.register_blueprint(endpoints_bp)
 except ImportError:

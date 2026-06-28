@@ -2,7 +2,7 @@ import os
 
 # Directly import the Flask application from `api.py`.
 # Vercel will look for a module-level `app` or `handler`.
-from api import app  # type: ignore
+from terabox_gateway.api import app  # type: ignore
 
 
 def main() -> None:

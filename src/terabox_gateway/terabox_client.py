@@ -11,8 +11,8 @@ from urllib.parse import parse_qs, urlparse
 
 import aiohttp
 
-from config import headers, load_cookies
-from utils import find_between, extract_thumbnail_dimensions, get_formatted_size
+from .config import headers, load_cookies
+from .utils import find_between, extract_thumbnail_dimensions, get_formatted_size
 
 
 class FileList(list):
