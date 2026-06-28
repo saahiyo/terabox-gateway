@@ -446,7 +446,9 @@ async def admin_proxy(subpath):
 @app.route("/swagger.json", methods=["GET"])
 def swagger_spec():
     """Serve the OpenAPI 3.0.0 JSON specification."""
-    return send_from_directory("public", "swagger.json")
+    import os
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    return send_from_directory(os.path.join(base_dir, "public"), "swagger.json")
 
 
 
