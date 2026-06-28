@@ -37,7 +37,7 @@ async def fetch_download_link(
         Union[List[Dict[str, Any]], Dict[str, Any]]: List of files or error dict
     """
     try:
-        from config import PROXY_BASE_URL, PROXY_MODE_RESOLVE
+        from .config import PROXY_BASE_URL, PROXY_MODE_RESOLVE
         
         # Extract surl from URL
         parsed_url = urlparse(url)
@@ -192,7 +192,7 @@ async def fetch_download_link(
                                 return result_files
                             
                             # Use mode=api for directory contents with the jsToken
-                            from config import PROXY_MODE_API
+                            from .config import PROXY_MODE_API
                             
                             dir_params = {
                                 "mode": PROXY_MODE_API,

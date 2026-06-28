@@ -117,7 +117,7 @@ async def _proxy_request(url: str, params: dict, cookies: dict, req_headers: dic
         dict: Response data with content, status, headers, and content_type
     """
     try:
-        from config import headers as default_headers
+        from .config import headers as default_headers
         proxy_headers = default_headers.copy()
         if req_headers:
             for k, v in req_headers.items():
