@@ -8,6 +8,17 @@ version = "2.0.2"
 description = "Fast Python gateway for extracting metadata, thumbnails, direct download links, and HLS streaming support from TeraBox share URLs."
 readme = "README.md"
 requires-python = ">=3.8"
+keywords = [
+    "terabox",
+    "gateway",
+    "terabox-bypass",
+    "terabox-gateway",
+    "terabox-api",
+    "terabox-hls",
+    "metadata",
+    "thumbnails",
+    "direct download links"
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -34,23 +45,11 @@ text = "MIT"
 name = "Shakir Ansari"
 email = "shakir.ansarii075@gmail.com"
 
-keywords = [
-    "terabox",
-    "gateway",
-    "terabox-bypass",
-    "terabox-gateway",
-    "terabox-api",
-    "terabox-hls",
-    "metadata",
-    "thumbnails",
-    "direct download links"
-]
-
 [project.urls]
 Homepage = "https://github.com/saahiyo/terabox-gateway"
 Repository = "https://github.com/saahiyo/terabox-gateway"
 Issues = "https://github.com/saahiyo/terabox-gateway/issues"
-Live Demo = "https://tera-core.vercel.app/" 
+"Live Demo" = "https://tera-core.vercel.app/"
 
 [project.scripts]
 terabox-gateway = "terabox_gateway.main:cli"
