@@ -429,6 +429,10 @@ You can configure the API using environment variables in your `.env` file:
 | `RATE_WINDOW` | Rate limit window size in seconds | `60` |
 | `CACHE_TTL` | Cache entry time-to-live in seconds | `60` |
 | `CACHE_MAX_SIZE` | Maximum number of cached entries | `500` |
+| `HTTP_MAX_RETRIES` | Max retry attempts for transient server/network failures | `3` |
+| `HTTP_INITIAL_DELAY` | Initial delay for the first retry backoff in seconds | `0.5` |
+| `HTTP_BACKOFF_FACTOR` | Multiplier applied to backoff delay per retry | `2.0` |
+
 
 **Cookie Priority**:
 1. `COOKIE_JSON` (from `.env`)
@@ -553,6 +557,11 @@ The `vercel.json` configuration is already set up for you.
 **Authentication Failures**
 - The `ndus` token is invalid or malformed
 - Solution: Copy the token again from your browser, ensuring no extra spaces
+
+**Local DNS Connection Errors (e.g. `ClientConnectorDNSError` / `aiodns` failures)**
+- Occurs when running in restricted environments/sandboxes where python's `aiodns` is blocked from querying DNS servers directly.
+- Solution: The codebase automatically routes all connection requests using Python's native `ThreadedResolver` to utilize the host OS DNS configuration, which resolves this issue out of the box.
+
 
 ---
 
